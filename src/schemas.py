@@ -50,6 +50,7 @@ class WeightConfig(BaseModel):
     preferred_skill_weight: float = Field(default=0.2, ge=0.0, le=1.0)
     semantic_weight: float = Field(default=0.2, ge=0.0, le=1.0)
     experience_weight: float = Field(default=0.1, ge=0.0, le=1.0)
+    experience_penalty: float = Field(default=0.6, ge=0.0, le=1.0)
 
 
 class ComponentScores(BaseModel):
@@ -74,6 +75,8 @@ class CandidateRanking(BaseModel):
     matched_required_skills: list[str] = Field(default_factory=list)
     matched_preferred_skills: list[str] = Field(default_factory=list)
     missing_required_skills: list[str] = Field(default_factory=list)
+    related_skills_matched: list[str] = Field(default_factory=list)
+    below_min_experience: bool = False
 
 
 class ScreeningResult(BaseModel):
@@ -82,3 +85,17 @@ class ScreeningResult(BaseModel):
     job: JobAnalysis
     rankings: list[CandidateRanking] = Field(default_factory=list)
     total_resumes: int = 0
+
+
+class Recommendation(BaseModel):
+    """Deterministic candidate recommendation summary for the top match."""
+
+    best_candidate: Optional[str] = None
+    best_score: Optional[float] = None
+    runner_up: Optional[str] = None
+    margin_over_runner_up: Optional[float] = None
+    strengths: list[str] = Field(default_factory=list)
+    gaps: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    summary_text: str = ""
+

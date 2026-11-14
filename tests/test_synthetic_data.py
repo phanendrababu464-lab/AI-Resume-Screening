@@ -81,6 +81,7 @@ class TestRepositoryCleanliness:
         ".gitignore",
         "README.md",
         "requirements.txt",
+        "run_app.sh",
     }
 
     ALLOWED_ROOT_DIRS = {
@@ -312,13 +313,15 @@ class TestSyntheticScreeningAndRanking:
             assert comp.tfidf_baseline_score is not None
             assert 0.0 <= comp.tfidf_baseline_score <= 1.0
 
-            # Mathematical composite verification (default weights: 0.5, 0.2, 0.2, 0.1)
+            # Mathematical composite verification (default weights: 0.5, 0.2, 0.2, 0.1, penalty 0.6)
             expected_raw = (
                 0.5 * comp.required_skill_score
                 + 0.2 * comp.preferred_skill_score
                 + 0.2 * comp.semantic_score
                 + 0.1 * comp.experience_score
             )
+            if r.below_min_experience:
+                expected_raw *= 0.6
             expected_score = round(expected_raw * 100.0, 2)
             assert abs(r.match_score - expected_score) <= 0.02, (
                 f"Composite score discrepancy for {r.candidate}: got {r.match_score}, expected {expected_score}"

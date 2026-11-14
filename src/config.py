@@ -28,3 +28,9 @@ DEFAULT_REQUIRED_SKILL_WEIGHT: float = 0.5
 DEFAULT_PREFERRED_SKILL_WEIGHT: float = 0.2
 DEFAULT_SEMANTIC_SIMILARITY_WEIGHT: float = 0.2
 DEFAULT_EXPERIENCE_WEIGHT: float = 0.1
+
+# Minimum-experience gate penalty
+DEFAULT_EXPERIENCE_PENALTY: float = 0.6
+
+# Related skills mapping file
+RELATED_SKILLS_FILE: Path = SKILLS_DIR / "related_skills.json"

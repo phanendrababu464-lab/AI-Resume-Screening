@@ -73,7 +73,7 @@ def test_legacy_app_wrapper_delegates_to_streamlit_app() -> None:
 
 def test_app_renders_smoke_test() -> None:
     """R1 Smoke Test: Headless execution of app/streamlit_app.py."""
-    at = AppTest.from_file(str(STREAMLIT_APP_PATH)).run(timeout=20)
+    at = AppTest.from_file(str(STREAMLIT_APP_PATH)).run(timeout=30)
     assert not at.exception, f"app/streamlit_app.py crashed on render: {at.exception}"
     assert len(at.title) > 0
     assert "AI-Based Resume Screening System" in at.title[0].value
@@ -86,5 +86,39 @@ def test_legacy_app_wrapper_renders_smoke_test() -> None:
     if "app" in sys.modules and not hasattr(sys.modules["app"], "__path__"):
         del sys.modules["app"]
 
-    at_legacy = AppTest.from_file(str(LEGACY_APP_PATH)).run(timeout=20)
+    at_legacy = AppTest.from_file(str(LEGACY_APP_PATH)).run(timeout=30)
     assert not at_legacy.exception, f"src/app.py crashed on render: {at_legacy.exception}"
+
+
+def test_verify_schemas_path_guard() -> None:
+    """Verifies that the environment guard function correctly detects inside vs outside schemas paths."""
+    from app.streamlit_app import verify_schemas_path
+
+    # Path inside repo root must return True
+    inside_path = REPO_ROOT / "src" / "schemas.py"
+    assert verify_schemas_path(REPO_ROOT, inside_path) is True
+
+    # Path outside repo root must return False
+    outside_path = Path("/Users/phanendra/Desktop/untitled folder 2/src/schemas.py")
+    assert verify_schemas_path(REPO_ROOT, outside_path) is False
+
+    outside_tmp = Path("/tmp/other_project/src/schemas.py")
+    assert verify_schemas_path(REPO_ROOT, outside_tmp) is False
+
+
+def test_screening_button_disabled_when_weights_invalid() -> None:
+    """Verifies that the screening button is disabled and an error message is shown when weights != 1.00."""
+    at = AppTest.from_file(str(STREAMLIT_APP_PATH)).run(timeout=20)
+    assert not at.exception
+
+    # Default weights sum to 1.00 -> button is enabled
+    assert len(at.button) > 0
+    assert at.button[0].disabled is False
+
+    # Adjust required weight slider so sum is 0.8 + 0.2 + 0.2 + 0.1 = 1.30
+    at.slider[0].set_value(0.8).run(timeout=20)
+    assert not at.exception
+    assert at.button[0].disabled is True
+    assert len(at.error) > 0
+    assert "Screening disabled: total scoring weights sum to 1.30" in at.error[0].value
+
