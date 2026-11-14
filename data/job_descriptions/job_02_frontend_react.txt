@@ -1,0 +1,12 @@
+Job Title: Lead Frontend React Developer
+Experience: At least 4 years of experience building modern responsive web applications.
+
+Required Skills:
+- Must have deep expertise in React and TypeScript.
+- Required mastery of JavaScript, HTML5, and CSS3.
+- Must possess experience with Next.js SSR applications and Git.
+
+Nice to Have:
+- Experience with GraphQL and WebSockets is preferred.
+- Familiarity with Cypress end-to-end testing and Docker is a bonus.
+- Knowledge of Sass stylesheet architecture is advantageous.

@@ -1,0 +1,73 @@
+%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj
+4 0 obj << /Length 1419 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 740 Td
+(Evan Wright) Tj
+T*
+(evan.wright@example.com | \(555\) 456-7890 | Chicago, IL) Tj
+T*
+() Tj
+T*
+(CAREER OBJECTIVE) Tj
+T*
+(Full-Stack and Mobile Developer with 3.5 years of experience delivering cross-platform mobile apps and Node.js backend services.) Tj
+T*
+() Tj
+T*
+(TECHNICAL SKILLS) Tj
+T*
+(JavaScript, TypeScript, React Native, React, Node.js, Express.js, MongoDB, RESTful APIs, Git, Firebase) Tj
+T*
+() Tj
+T*
+(PROFESSIONAL EXPERIENCE) Tj
+T*
+(Fullstack & Mobile Developer | AppVenture Media | 2021 - Present) Tj
+T*
+(- Developed cross-platform iOS and Android applications with React Native and TypeScript.) Tj
+T*
+(- Built backend microservices and RESTful APIs using Node.js and Express.js with MongoDB and Firebase.) Tj
+T*
+(- 3.5 years of experience in software engineering across frontend, mobile, and backend web tiers.) Tj
+T*
+(Junior Software Engineer | MobileFirst Labs | 2020 - 2021) Tj
+T*
+(- Implemented user interfaces in React and JavaScript.) Tj
+T*
+(- Integrated third-party RESTful APIs and maintained version control with Git.) Tj
+T*
+() Tj
+T*
+(EDUCATION) Tj
+T*
+(B.S. in Computer Science | Georgia Institute of Technology | 2016 - 2020) Tj
+T*
+() Tj
+T*
+(PROJECTS) Tj
+T*
+(Cross-Platform Food Delivery App: Mobile application built with React Native, Node.js, and MongoDB.) Tj
+T*
+(Real-Time Chat App: Mobile messaging app utilizing Firebase real-time database and TypeScript.) Tj
+ET
+endstream
+endobj
+5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+xref
+0 6
+0000000000 65535 f 
+0000000010 00000 n 
+0000000060 00000 n 
+0000000117 00000 n 
+0000000250 00000 n 
+0000000350 00000 n 
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+500
+%%EOF
