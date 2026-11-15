@@ -82,6 +82,42 @@ PREF_CUE_PATTERNS = re.compile(
 )
 
 
+def detect_multiple_jobs(text: str) -> tuple[bool, str | None]:
+    """Detects if job description text appears to contain multiple job postings or roles.
+
+    Returns:
+        (has_multiple_jobs, warning_message)
+    """
+    if not text or not isinstance(text, str):
+        return False, None
+
+    # Pattern 1: Multiple explicit Job Title / Position Title lines
+    title_matches = re.findall(
+        r"(?im)^(?:\s*#*\s*)(?:job\s+title|position\s+title|target\s+role|role\s+title|position)\s*:\s*[^\n]+",
+        text,
+    )
+    if len(title_matches) >= 2:
+        return True, "This description appears to contain multiple job postings (multiple Job Title lines detected). Evaluating one job description per run yields more accurate skill matching."
+
+    # Pattern 2: Numbered postings e.g. "Job 1:", "Job 2:", "Position 1:", "Role 1:", "Posting 1:"
+    numbered_jobs = re.findall(
+        r"(?im)^(?:\s*#*\s*)(?:job|position|role|opening|posting)\s*(?:#|\b)?\s*([1-9]|one|two|three)\s*[:\-\.]",
+        text,
+    )
+    if len(numbered_jobs) >= 2:
+        return True, "This description appears to contain multiple numbered job postings. Evaluating one role per run yields more accurate skill matching."
+
+    # Pattern 3: Multiple distinct Requirements headers
+    req_headers = re.findall(
+        r"(?im)^(?:\s*#*\s*)(?:requirements|required\s+skills|minimum\s+qualifications)\s*:",
+        text,
+    )
+    if len(req_headers) >= 2:
+        return True, "This description appears to contain multiple job specification sections. Evaluating one role per run yields more accurate skill matching."
+
+    return False, None
+
+
 def extract_min_experience_years(text: str) -> float | None:
     """Extracts minimum required years of experience from text.
 
@@ -109,7 +145,7 @@ def extract_min_experience_years(text: str) -> float | None:
         # Pattern 3: X+ years / X+ yrs
         r"(\d+(?:\.\d+)?)\s*\+\s*\b(?:years?|yrs?)\b(?!\s+(?:old|of\s+age)\b)",
         # Pattern 4: X years of (relevant/work/etc.) experience or X years in ...
-        r"(\d+(?:\.\d+)?)\s*\b(?:years?|yrs?)\b\s+(?:of\s+)?(?:[a-z]+\s+)?experience(?!\s+(?:old|of\s+age)\b)",
+        r"(\d+(?:\.\d+)?)\s*\b(?:years?|yrs?)\b\s+(?:of\s+)?(?:[a-z]+\s+)?(?:experience|exp\.?)\b(?!\s+(?:old|of\s+age)\b)",
         r"(\d+(?:\.\d+)?)\s*\b(?:years?|yrs?)\b\s+in\s+",
         # Pattern 5: experience: X years
         r"experience\s*:\s*(?:at\s+least|min\.?|minimum)?\s*(\d+(?:\.\d+)?)\s*\+?\s*\b(?:years?|yrs?)\b(?!\s+(?:old|of\s+age)\b)",
@@ -284,10 +320,14 @@ def parse_job_description(text: str) -> dict[str, Any]:
     sorted_pref = sorted(pref_skills)
     sorted_all = sorted(req_skills | pref_skills)
 
+    has_multi, multi_warn = detect_multiple_jobs(text)
+
     return {
         "raw_text": text,
         "required_skills": sorted_req,
         "preferred_skills": sorted_pref,
         "all_skills": sorted_all,
         "min_experience_years": min_exp,
+        "has_multiple_jobs": has_multi,
+        "multiple_jobs_warning": multi_warn,
     }

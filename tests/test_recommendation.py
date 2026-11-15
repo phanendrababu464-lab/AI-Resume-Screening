@@ -130,7 +130,11 @@ def test_build_recommendation_normal_case() -> None:
     assert rec.best_candidate == "Alice.pdf"
     assert rec.best_score == 88.0
     assert rec.runner_up == "Bob.docx"
+    assert rec.runner_up_score == 75.0
     assert rec.margin_over_runner_up == 13.0
+    assert rec.missing_skills == ["PostgreSQL"]
+    assert rec.is_tie is False
+    assert rec.tied_candidates == ["Alice.pdf"]
     assert "Outperforms runner-up Bob.docx" in rec.summary_text
     # Strengths include matched skills and strongest component
     assert any("Python" in s and "FastAPI" in s for s in rec.strengths)
@@ -146,7 +150,7 @@ def test_build_recommendation_tied_scores() -> None:
     rec = build_recommendation([c1, c2])
 
     assert rec.best_candidate == "Alice.pdf"
-    assert rec.runner_up == "Bob.docx"
+    assert rec.runner_up is None  # Tied for top place: do not name an arbitrary runner-up
     assert rec.margin_over_runner_up == 0.0
     assert "Tied for top position with Bob.docx" in rec.summary_text
 
@@ -282,3 +286,74 @@ def test_chart_data_helpers() -> None:
         "Experience Match",
         "TF-IDF Baseline",
     }
+
+
+def test_build_recommendation_wording_partial_fit_low_score() -> None:
+    """Verifies that composite score < 50 triggers 'best available match, partial fit' and never 'strong alignment'."""
+    c = _make_candidate(
+        candidate="LowScorer.pdf",
+        rank=1,
+        match_score=42.0,
+        matched_req=["Python"],
+        missing_req=[],
+        below_min_exp=False,
+    )
+    job = JobAnalysis(raw_text="Job", required_skills=["Python"])
+    rec = build_recommendation([c], job=job)
+
+    assert "strong alignment" not in rec.summary_text.lower()
+    assert "best available match, partial fit" in rec.summary_text.lower()
+    assert "composite score below 50%" in rec.summary_text.lower()
+
+
+def test_build_recommendation_wording_partial_fit_missing_required() -> None:
+    """Verifies that missing required skills triggers 'best available match, partial fit' and names missing skills."""
+    c = _make_candidate(
+        candidate="MissingSkills.pdf",
+        rank=1,
+        match_score=85.0,
+        matched_req=["Python"],
+        missing_req=["Docker", "Kubernetes"],
+        below_min_exp=False,
+    )
+    job = JobAnalysis(raw_text="Job", required_skills=["Python", "Docker", "Kubernetes"])
+    rec = build_recommendation([c], job=job)
+
+    assert "strong alignment" not in rec.summary_text.lower()
+    assert "best available match, partial fit" in rec.summary_text.lower()
+    assert "missing required skills: Docker, Kubernetes" in rec.summary_text
+
+
+def test_build_recommendation_wording_partial_fit_below_min_exp() -> None:
+    """Verifies that below_min_experience triggers 'best available match, partial fit' and names experience gap."""
+    c = _make_candidate(
+        candidate="Junior.pdf",
+        rank=1,
+        match_score=92.0,
+        matched_req=["Python", "FastAPI"],
+        missing_req=[],
+        below_min_exp=True,
+    )
+    job = JobAnalysis(raw_text="Job", required_skills=["Python", "FastAPI"], min_experience_years=5.0)
+    rec = build_recommendation([c], job=job)
+
+    assert "strong alignment" not in rec.summary_text.lower()
+    assert "best available match, partial fit" in rec.summary_text.lower()
+    assert "falls below the minimum required experience (5.0+ years required)" in rec.summary_text
+
+
+def test_build_recommendation_wording_strong_alignment() -> None:
+    """Verifies that candidate with all required skills, score >= 50, and experience met receives 'strong alignment'."""
+    c = _make_candidate(
+        candidate="PerfectFit.pdf",
+        rank=1,
+        match_score=95.0,
+        matched_req=["Python", "FastAPI"],
+        missing_req=[],
+        below_min_exp=False,
+    )
+    job = JobAnalysis(raw_text="Job", required_skills=["Python", "FastAPI"], min_experience_years=3.0)
+    rec = build_recommendation([c], job=job)
+
+    assert "demonstrates strong alignment" in rec.summary_text.lower()
+    assert "best available match, partial fit" not in rec.summary_text.lower()

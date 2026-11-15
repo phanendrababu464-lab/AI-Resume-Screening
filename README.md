@@ -4,11 +4,11 @@
 [![Architecture](https://img.shields.io/badge/architecture-4--tier%20decoupled-teal.svg)](#architecture-overview)
 [![Pydantic v2](https://img.shields.io/badge/contracts-pydantic%20v2-green.svg)](https://docs.pydantic.dev/)
 [![Hardware](https://img.shields.io/badge/hardware-CPU%20only%20%28no%20GPU%29-orange.svg)](#prerequisites)
-[![Tests Passing](https://img.shields.io/badge/tests-321%20passed-brightgreen.svg)](#testing--verification)
+[![Tests Passing](https://img.shields.io/badge/tests-386%20passed-brightgreen.svg)](#testing--verification)
 
 An enterprise-grade, NLP-driven resume screening and ranking platform tailored for technical hiring. The system parses multi-format candidate resumes (`.pdf` and `.docx`), extracts structured sections and technical skills using a curated IT taxonomy and `spaCy` phrase matching, redacts PII for demographic evaluation invariance, and ranks candidates against job descriptions using a 4-component composite scoring engine powered by `sentence-transformers/all-MiniLM-L6-v2`.
 
-Designed with a **strict 4-tier decoupled architecture**, the system can be operated either via a modern interactive **Streamlit web dashboard** or headless via a **typed Python service layer API** suitable for microservices, background job workers, and automated hiring pipelines.
+Designed with a **strict 4-tier decoupled architecture**, the system can be operated either via a modern interactive **React + Vite web interface (backed by FastAPI)** or headless via a **typed Python service layer API** suitable for microservices, background job workers, and automated hiring pipelines.
 
 ---
 
@@ -26,9 +26,10 @@ Designed with a **strict 4-tier decoupled architecture**, the system can be oper
   - [2. Virtual Environment Setup](#2-virtual-environment-setup)
   - [3. Install Dependencies](#3-install-dependencies)
 - [Usage Guidelines](#usage-guidelines)
-  - [A. Interactive Streamlit Dashboard](#a-interactive-streamlit-dashboard)
-  - [B. Headless Service Layer API](#b-headless-service-layer-api)
-  - [C. Configuration & Weight Tuning](#c-configuration--weight-tuning)
+  - [A. Full-Stack Web Application (React + FastAPI)](#a-full-stack-web-application-react--fastapi)
+  - [B. Running via Launcher Scripts](#b-running-via-launcher-scripts)
+  - [C. Headless Service Layer API](#c-headless-service-layer-api)
+  - [D. Configuration & Weight Tuning](#d-configuration--weight-tuning)
 - [Synthetic Data Assets](#synthetic-data-assets)
 - [Testing & Verification](#testing--verification)
   - [Running the Test Suite](#running-the-test-suite)
@@ -69,7 +70,7 @@ The system is organized into a **4-tier decoupled architecture**, strictly isola
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                   Tier 1: Presentation Layer                           │
-│  app/streamlit_app.py (Modern UI)   │  src/app.py (Legacy Wrapper)     │
+│  frontend/ (React + Vite Web UI)    │  src/api.py (FastAPI REST API)   │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ (Calls Service Layer APIs only)
                                     ▼
@@ -218,18 +219,27 @@ class ScreeningResult(BaseModel):
 
 ```text
 resume-screening-system/
-├── app/
-│   ├── __init__.py
-│   └── streamlit_app.py         # Relocated Streamlit UI (strictly decoupled)
 ├── data/
 │   ├── skills/
-│   │   └── technical_skills.json # Curated IT / Software Engineering skill taxonomy
+│   │   ├── technical_skills.json # Curated IT / Software Engineering skill taxonomy
+│   │   └── related_skills.json   # Semantic partial-credit similarity graph
 │   ├── resumes/                 # 10 synthetic resumes (5 .pdf, 5 .docx)
 │   └── job_descriptions/        # 3 synthetic technical job descriptions (.txt)
 ├── docs/
 │   └── teamwork/                # Internal team coordination & audit records
+├── frontend/                    # Modern React + Vite + TypeScript web interface
+│   ├── src/
+│   │   ├── components/          # TopBar, SetupSection, ScoringSettings, Results/
+│   │   ├── context/             # ThemeContext (dark/light theme persistence)
+│   │   ├── services/            # Typed API client with Vite proxy
+│   │   ├── types/               # TypeScript interfaces matching backend models
+│   │   └── utils/               # Normalizing, formatting & validation helpers
+│   ├── package.json
+│   ├── tailwind.config.js       # Design tokens (indigo accent, neutral surfaces)
+│   └── vite.config.ts           # Proxy to FastAPI on :8000
 ├── src/
 │   ├── __init__.py
+│   ├── api.py                   # FastAPI REST backend (/api/screen, /api/jobs/analyze, etc.)
 │   ├── config.py                # Centralized paths, model configurations, default weights
 │   ├── schemas.py               # Strongly-typed Pydantic v2 schemas
 │   ├── preprocessor.py          # Text normalization, bullet & hyphen preservation
@@ -238,7 +248,6 @@ resume-screening-system/
 │   ├── skill_extractor.py       # spaCy PhraseMatcher with edge-case resolution
 │   ├── anonymizer.py            # PII redaction & demographic evaluation invariance engine
 │   ├── ranker.py                # Semantic similarity, TF-IDF baseline, candidate ranker
-│   ├── app.py                   # Backward compatibility wrapper for Streamlit UI
 │   └── services/
 │       ├── __init__.py
 │       └── screening_service.py # UI-free headless service layer
@@ -254,10 +263,14 @@ resume-screening-system/
 │   ├── test_edge_cases.py       # Skill extraction edge case tests (21 tests)
 │   ├── test_anonymizer.py       # PII redaction & score invariance tests (43 tests)
 │   ├── test_screening_service.py# Headless service layer & schema tests (16 tests)
-│   ├── test_ui_decoupling.py    # UI decoupling & wrapper delegation tests (4 tests)
+│   ├── test_ui_decoupling.py    # Architecture decoupling & retirement audit tests (6 tests)
+│   ├── test_experience_gate.py  # Below-minimum experience gate tests (5 tests)
+│   ├── test_related_skills.py   # Semantic partial credit tests (5 tests)
 │   ├── test_synthetic_data.py   # Synthetic data validation tests
 │   └── test_e2e_screening.py    # 4-Tier end-to-end evaluation suite (124 tests)
 ├── .gitignore
+├── run_app.sh                   # One-click launcher for Streamlit app
+├── run_web.sh                   # One-click launcher for FastAPI (:8000) + React (:5173)
 ├── requirements.txt             # Locked project dependencies
 └── README.md                    # Comprehensive system documentation
 ```
@@ -314,35 +327,70 @@ pip install -r requirements.txt
 
 ## Usage Guidelines
 
-### A. Interactive Streamlit Dashboard
+### A. Full-Stack Web Application (React + FastAPI)
 
-To launch the modern interactive web application, execute:
+The project includes an enterprise-grade web application built with **React 18 + Vite + TypeScript + Tailwind CSS**, communicating with a **FastAPI** backend via typed JSON endpoints.
+
+#### 1. One-Command Startup
+To start both the FastAPI backend (`http://127.0.0.1:8000`) and the React frontend (`http://localhost:5173`) with automated cleanup:
 
 ```bash
-streamlit run app/streamlit_app.py
+./run_web.sh
 ```
 
-*(Alternatively, the backward-compatible entry point `streamlit run src/app.py` is fully supported).*
+#### 2. Manual Dev Server Startup
+If running services individually:
 
-Once started, open your web browser at `http://localhost:8501`.
+```bash
+# Terminal 1: Backend API (port 8000)
+source .venv/bin/activate
+uvicorn src.api:app --host 127.0.0.1 --port 8000 --reload
 
-#### Using the Dashboard:
-1. **Configure Weights (Sidebar)**:
-   - Fine-tune sliders for **Required Skills Weight** (default: `0.50`), **Preferred Skills Weight** (default: `0.20`), **Semantic Similarity Weight** (default: `0.20`), and **Experience Match Weight** (default: `0.10`).
-   - The sidebar provides real-time validation ensuring total weight equals `1.00`.
-2. **Input Job Description (Left Column)**:
-   - Paste any technical job description. The live analyzer will immediately extract and display detected **Required Skills**, **Preferred Skills**, and **Minimum Experience Required**.
-3. **Upload Resumes (Right Column)**:
-   - Drag and drop one or more `.pdf` or `.docx` candidate resumes.
-4. **Screen and Rank**:
-   - Click **"🚀 Screen and Rank Resumes"**.
-   - The application automatically anonymizes candidate PII, extracts sections and skills, computes embedding similarities, and renders:
-     - An **interactive leaderboard table** sorted by composite match score.
-     - **Detailed candidate breakdown cards** with component metrics (`Required Skills %`, `Preferred Skills %`, `Semantic Match %`, `Experience Match %`, `TF-IDF Baseline %`), as well as visual badges for **Matched Required Skills**, **Matched Preferred Skills**, and **Missing Required Skills**.
+# Terminal 2: Frontend (port 5173 with Vite proxy)
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173` in any browser.
+
+#### Key Frontend Capabilities:
+- **Design System & Themes**: Clean, professional recruiting tool aesthetic built on an 8px grid with neutral surfaces, a single Indigo accent (`#6366f1`), Inter typography, rounded cards, and full **Dark / Light mode** toggle (stored in `localStorage` and respecting system preferences). All chart labels and text maintain high contrast across themes.
+- **Top Bar**: Live API health monitoring dot (green/red from `/api/health`), theme toggle, and an interactive **"How Scoring Works"** modal detailing the 4-component formula, experience penalty gate, and related-skill partial credit.
+- **Side-by-Side Setup**:
+  - *Target Job Description*: Monospace textarea, "Use sample job" dropdown (`/api/samples`), and a debounced live preview (`/api/jobs/analyze`) displaying extracted required and preferred skill chips and minimum experience gate.
+  - *Candidate Resumes*: Drag-and-drop zone and file picker with client-side validation (PDF/DOCX, 5 MB limit, max 100 resumes), removable file chips with size badges, and a "Use sample resumes" button.
+- **Scoring Parameters (Collapsible Panel)**: 4 weight sliders with real-time sum indicator, **"Normalize to 100%"** button, configurable below-minimum-experience penalty slider, Anonymize toggle, and "Reset to Defaults". The **"Screen & Rank Resumes"** button is disabled with a visible explanation until inputs are valid and weights equal exactly 100%.
+- **Evaluation & Candidate Ranking Results**:
+  1. **Best Match Hero Card**: Large SVG match score ring, runner-up comparison with margin points, deterministic recommendation text, and three structured cards (Key Strengths, Gaps & Unmatched Skills, Advisory Warnings).
+  2. **Candidate Leaderboard**: Descending horizontal ranked bars, top candidate highlighted in emerald, below-minimum-experience warning badges, and clickable rows that open the Candidate Detail Drawer.
+  3. **Score Composition Breakdown**: Recharts stacked horizontal bars showing exact percentage contributions of Required, Preferred, Semantic, and Experience components, plus footnotes where experience penalties were applied.
+  4. **Skill Match Matrix**: Grouped columns (**REQUIRED SKILLS** first, then **PREFERRED SKILLS** with a vertical divider), sticky candidate column, uniform cells with colors and symbols (`✓` exact, `≈` related with matched skill tooltip, `✗` missing), and a summary column (`e.g. 7/7 required`).
+  5. **Candidate Detail Drawer**: Slide-over drawer with 5 component score progress bars and full skill taxonomy breakdown chips.
+  6. **Export Action**: One-click CSV export button (`/api/export`).
 
 ---
 
-### B. Headless Service Layer API
+### B. Running via Launcher Scripts
+
+The unified runner script launches both the FastAPI backend and the React + Vite web application together:
+
+```bash
+./run_app.sh
+```
+
+*(Alternatively, `./run_web.sh` directly starts both services).*
+
+Once started:
+- **Web Frontend**: `http://localhost:5173`
+- **FastAPI API**: `http://127.0.0.1:8000`
+- **Interactive Swagger Docs**: `http://127.0.0.1:8000/docs`
+
+*(Note: The legacy Streamlit prototype has been retired in favor of the production React + FastAPI architecture).*
+
+---
+
+### C. Headless Service Layer API
 
 For automated pipelines, microservice endpoints, or batch evaluations, use the headless service layer in `src.services.screening_service`. It requires no UI and operates purely via Python functions and Pydantic schemas.
 
@@ -428,7 +476,7 @@ print(anonymized_resume)
 
 ---
 
-### C. Configuration & Weight Tuning
+### D. Configuration & Weight Tuning
 
 The system provides two levels of configuration:
 
@@ -464,42 +512,35 @@ To support out-of-the-box evaluation and hermetic automated testing, the reposit
 
 ## Testing & Verification
 
-The system maintains a comprehensive, hermetic automated test suite with **350 passing tests** executed via `pytest`. All tests execute locally on CPU with zero network calls and zero mock-bypassing.
+The system maintains a comprehensive, hermetic automated test suite with **371 backend tests** executed via `pytest` and **15 frontend unit tests** executed via `vitest` (386 total passing tests). All tests execute locally on CPU with zero network calls and zero mock-bypassing.
 
-### Running the Test Suite
+### Running Backend Tests (`pytest`)
 
-Execute the entire test suite with verbose output:
+Execute the entire backend test suite:
 
 ```bash
-pytest tests/ -v
+source .venv/bin/activate
+pytest -q
 ```
 
-Execute a specific test module:
+Output:
+```text
+371 passed in ~24s
+```
+
+### Running Frontend Tests (`vitest`)
+
+Execute the frontend unit test suite:
 
 ```bash
-# Test UI-free service layer and Pydantic schemas
-pytest tests/test_screening_service.py -v
+cd frontend
+npm test
+```
 
-# Test skill extraction edge cases (C#, C++, .NET, Node.js, R, aliases, plurals)
-pytest tests/test_edge_cases.py -v
-
-# Test candidate anonymization and evaluation invariance
-pytest tests/test_anonymizer.py -v
-
-# Test resume section splitting and fallback classifier
-pytest tests/test_section_splitting.py -v
-
-# Test cue-phrase job parsing
-pytest tests/test_job_parser.py -v
-
-# Test UI decoupling and backward compatibility wrappers
-pytest tests/test_ui_decoupling.py -v
-
-# Test synthetic data assets and repository hygiene
-pytest tests/test_synthetic_data.py -v
-
-# Test 4-tier requirement-driven end-to-end evaluation suite
-pytest tests/test_e2e_screening.py -v
+Output:
+```text
+Test Files  1 passed (1)
+     Tests  15 passed (15)
 ```
 
 ### Test Suite Breakdown
@@ -515,10 +556,13 @@ pytest tests/test_e2e_screening.py -v
 | `tests/test_edge_cases.py` | 21 | C#, C++, .NET, Node.js, standalone R guard, Java vs JS, aliases, plurals |
 | `tests/test_anonymizer.py` | 43 | PII redaction (names, emails, phones, pronouns) & evaluation invariance |
 | `tests/test_screening_service.py` | 16 | Headless service layer functions, Pydantic contracts, stream ingestion |
-| `tests/test_ui_decoupling.py` | 4 | UI decoupling verification (zero business logic in Streamlit UI) |
+| `tests/test_ui_decoupling.py` | 5 | UI decoupling & wrong environment path guard verification |
+| `tests/test_experience_gate.py` | 5 | Below-minimum-experience penalty, flag, and score attenuation |
+| `tests/test_related_skills.py` | 7 | Semantic partial credit graph, exact match dominance, weight integrity |
 | `tests/test_synthetic_data.py` | 92 | Validation of 10 synthetic resumes and 3 synthetic job descriptions |
 | `tests/test_e2e_screening.py` | 124 | 4-Tier end-to-end requirement, boundary, and stress evaluation suite |
-| **Total** | **350** | **100% Passing on CPU without mocks or skips** |
+| `frontend/src/utils/helpers.test.ts` | 15 | Weight normalization, formatting, file validation, related skills parsing |
+| **Total Automated Tests** | **386** | **100% Passing (371 Pytest + 15 Vitest)** |
 
 ### Quality & Integrity Guarantees
 

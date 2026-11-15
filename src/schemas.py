@@ -15,10 +15,13 @@ class JobAnalysis(BaseModel):
 
     raw_text: str
     cleaned_text: str = ""
+    job_title: Optional[str] = None
     required_skills: list[str] = Field(default_factory=list)
     preferred_skills: list[str] = Field(default_factory=list)
     all_skills: list[str] = Field(default_factory=list)
     min_experience_years: Optional[float] = None
+    has_multiple_jobs: bool = False
+    multiple_jobs_warning: Optional[str] = None
 
 
 class ResumeSections(BaseModel):
@@ -41,6 +44,9 @@ class ParsedResume(BaseModel):
     skills: list[str] = Field(default_factory=list)
     experience_years: Optional[float] = None
     anonymized_text: Optional[str] = None
+    text_hash: Optional[str] = None
+    is_duplicate: bool = False
+    duplicate_of: Optional[str] = None
 
 
 class WeightConfig(BaseModel):
@@ -51,15 +57,16 @@ class WeightConfig(BaseModel):
     semantic_weight: float = Field(default=0.2, ge=0.0, le=1.0)
     experience_weight: float = Field(default=0.1, ge=0.0, le=1.0)
     experience_penalty: float = Field(default=0.6, ge=0.0, le=1.0)
+    renormalize_weights: bool = Field(default=True)
 
 
 class ComponentScores(BaseModel):
     """Individual breakdown scores comprising the composite ranking."""
 
-    required_skill_score: float = 0.0
-    preferred_skill_score: float = 0.0
+    required_skill_score: Optional[float] = None
+    preferred_skill_score: Optional[float] = None
     semantic_score: float = 0.0
-    experience_score: float = 0.0
+    experience_score: Optional[float] = None
     tfidf_baseline_score: Optional[float] = None
 
 
@@ -67,6 +74,7 @@ class CandidateRanking(BaseModel):
     """Evaluated ranking output for a candidate against a job description."""
 
     rank: int
+    rank_display: str = ""
     candidate: str
     match_score: float
     component_scores: ComponentScores
@@ -77,6 +85,9 @@ class CandidateRanking(BaseModel):
     missing_required_skills: list[str] = Field(default_factory=list)
     related_skills_matched: list[str] = Field(default_factory=list)
     below_min_experience: bool = False
+    is_duplicate: bool = False
+    duplicate_of: Optional[str] = None
+    text_hash: Optional[str] = None
 
 
 class ScreeningResult(BaseModel):
@@ -85,6 +96,9 @@ class ScreeningResult(BaseModel):
     job: JobAnalysis
     rankings: list[CandidateRanking] = Field(default_factory=list)
     total_resumes: int = 0
+    effective_weights: dict[str, float] = Field(default_factory=dict)
+    non_applicable_components: list[str] = Field(default_factory=list)
+    weight_redistribution_note: Optional[str] = None
 
 
 class Recommendation(BaseModel):
@@ -93,9 +107,12 @@ class Recommendation(BaseModel):
     best_candidate: Optional[str] = None
     best_score: Optional[float] = None
     runner_up: Optional[str] = None
+    runner_up_score: Optional[float] = None
     margin_over_runner_up: Optional[float] = None
+    missing_skills: list[str] = Field(default_factory=list)
+    is_tie: bool = False
+    tied_candidates: list[str] = Field(default_factory=list)
     strengths: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     summary_text: str = ""
-

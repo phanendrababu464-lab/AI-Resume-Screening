@@ -1,20 +1,33 @@
-"""Automated verification and static audit for Streamlit UI Decoupling (Requirement R1)."""
+"""Automated verification and static audit for Web/API Decoupling and Streamlit Retirement (Requirement R1)."""
 
 import ast
 from pathlib import Path
 import pytest
-from streamlit.testing.v1 import AppTest
+from fastapi.testclient import TestClient
+
+from src.api import app
+from src.services.screening_service import verify_schemas_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 STREAMLIT_APP_PATH = REPO_ROOT / "app" / "streamlit_app.py"
 LEGACY_APP_PATH = REPO_ROOT / "src" / "app.py"
+API_PATH = REPO_ROOT / "src" / "api.py"
+REQUIREMENTS_PATH = REPO_ROOT / "requirements.txt"
+RUN_APP_PATH = REPO_ROOT / "run_app.sh"
 
 
-def test_ui_has_zero_domain_business_logic_imports() -> None:
-    """R1 Audit: Verifies app/streamlit_app.py imports ONLY service layer and schemas."""
-    assert STREAMLIT_APP_PATH.exists(), f"Missing {STREAMLIT_APP_PATH}"
+def test_streamlit_and_legacy_app_are_retired() -> None:
+    """R1 Audit: Verifies app/streamlit_app.py, src/app.py, and app/ are retired and do not exist."""
+    assert not STREAMLIT_APP_PATH.exists(), f"Retired file still exists: {STREAMLIT_APP_PATH}"
+    assert not LEGACY_APP_PATH.exists(), f"Retired file still exists: {LEGACY_APP_PATH}"
+    assert not (REPO_ROOT / "app").exists(), f"Retired directory still exists: {REPO_ROOT / 'app'}"
 
-    tree = ast.parse(STREAMLIT_APP_PATH.read_text(encoding="utf-8"))
+
+def test_api_has_zero_domain_business_logic_imports() -> None:
+    """R1 Audit: Verifies src/api.py imports ONLY service layer and schemas."""
+    assert API_PATH.exists(), f"Missing {API_PATH}"
+
+    tree = ast.parse(API_PATH.read_text(encoding="utf-8"))
 
     forbidden_prefixes = (
         "src.parser",
@@ -41,59 +54,35 @@ def test_ui_has_zero_domain_business_logic_imports() -> None:
     for mod in imported_modules:
         for forbidden in forbidden_prefixes:
             assert not mod.startswith(forbidden), (
-                f"Violation of R1 Decoupling: app/streamlit_app.py illegally imports '{mod}'."
+                f"Violation of R1 Decoupling: src/api.py illegally imports '{mod}'."
             )
 
     # Positively assert required service layer imports
     assert any("src.services.screening_service" in m for m in imported_modules), (
-        "app/streamlit_app.py must import from src.services.screening_service"
+        "src/api.py must import from src.services.screening_service"
     )
     assert any("src.schemas" in m for m in imported_modules), (
-        "app/streamlit_app.py must import from src.schemas"
+        "src/api.py must import from src.schemas"
     )
 
 
-def test_legacy_app_wrapper_delegates_to_streamlit_app() -> None:
-    """R1 Audit: Verifies src/app.py delegates to app.streamlit_app."""
-    assert LEGACY_APP_PATH.exists(), f"Missing {LEGACY_APP_PATH}"
-    tree = ast.parse(LEGACY_APP_PATH.read_text(encoding="utf-8"))
-
-    imported_modules = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                imported_modules.add(alias.name)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            imported_modules.add(node.module)
-
-    assert any("app.streamlit_app" in m for m in imported_modules), (
-        "src/app.py must import from app.streamlit_app"
-    )
+def test_requirements_has_no_streamlit_dependency() -> None:
+    """R1 Audit: Verifies requirements.txt does not contain streamlit dependency."""
+    assert REQUIREMENTS_PATH.exists(), f"Missing {REQUIREMENTS_PATH}"
+    reqs_text = REQUIREMENTS_PATH.read_text(encoding="utf-8")
+    assert "streamlit" not in reqs_text.lower(), "requirements.txt must not contain streamlit"
 
 
-def test_app_renders_smoke_test() -> None:
-    """R1 Smoke Test: Headless execution of app/streamlit_app.py."""
-    at = AppTest.from_file(str(STREAMLIT_APP_PATH)).run(timeout=30)
-    assert not at.exception, f"app/streamlit_app.py crashed on render: {at.exception}"
-    assert len(at.title) > 0
-    assert "AI-Based Resume Screening System" in at.title[0].value
-
-
-def test_legacy_app_wrapper_renders_smoke_test() -> None:
-    """R1 Smoke Test: Headless execution of src/app.py wrapper."""
-    # Ensure sys.modules does not retain shadowed 'app' from prior AppTest runs
-    import sys
-    if "app" in sys.modules and not hasattr(sys.modules["app"], "__path__"):
-        del sys.modules["app"]
-
-    at_legacy = AppTest.from_file(str(LEGACY_APP_PATH)).run(timeout=30)
-    assert not at_legacy.exception, f"src/app.py crashed on render: {at_legacy.exception}"
+def test_run_app_script_delegates_to_web_stack() -> None:
+    """R1 Audit: Verifies run_app.sh delegates to run_web.sh and does not execute streamlit."""
+    assert RUN_APP_PATH.exists(), f"Missing {RUN_APP_PATH}"
+    script_text = RUN_APP_PATH.read_text(encoding="utf-8")
+    assert "streamlit run" not in script_text.lower(), "run_app.sh must not execute streamlit"
+    assert "run_web.sh" in script_text, "run_app.sh must delegate to run_web.sh"
 
 
 def test_verify_schemas_path_guard() -> None:
     """Verifies that the environment guard function correctly detects inside vs outside schemas paths."""
-    from app.streamlit_app import verify_schemas_path
-
     # Path inside repo root must return True
     inside_path = REPO_ROOT / "src" / "schemas.py"
     assert verify_schemas_path(REPO_ROOT, inside_path) is True
@@ -106,19 +95,20 @@ def test_verify_schemas_path_guard() -> None:
     assert verify_schemas_path(REPO_ROOT, outside_tmp) is False
 
 
-def test_screening_button_disabled_when_weights_invalid() -> None:
-    """Verifies that the screening button is disabled and an error message is shown when weights != 1.00."""
-    at = AppTest.from_file(str(STREAMLIT_APP_PATH)).run(timeout=20)
-    assert not at.exception
-
-    # Default weights sum to 1.00 -> button is enabled
-    assert len(at.button) > 0
-    assert at.button[0].disabled is False
-
-    # Adjust required weight slider so sum is 0.8 + 0.2 + 0.2 + 0.1 = 1.30
-    at.slider[0].set_value(0.8).run(timeout=20)
-    assert not at.exception
-    assert at.button[0].disabled is True
-    assert len(at.error) > 0
-    assert "Screening disabled: total scoring weights sum to 1.30" in at.error[0].value
-
+def test_screening_endpoint_disabled_when_weights_invalid() -> None:
+    """Verifies that the screening endpoint returns 400 Bad Request when weights do not sum to 1.00."""
+    client = TestClient(app)
+    # Adjust required weight slider so sum is 0.5 + 0.5 + 0.2 + 0.1 = 1.30
+    response = client.post(
+        "/api/screen",
+        data={
+            "job_text": "Software Engineer. Required: Python.",
+            "use_sample_resumes": True,
+            "required_skill_weight": 0.50,
+            "preferred_skill_weight": 0.50,
+            "semantic_weight": 0.20,
+            "experience_weight": 0.10,
+        },
+    )
+    assert response.status_code == 400
+    assert "weights must sum to 1.00" in response.json()["detail"]

@@ -6,6 +6,7 @@ candidate anonymization, and 4-component weighted candidate ranking.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -23,6 +24,7 @@ from src.config import (
     DEFAULT_EXPERIENCE_PENALTY,
     DEFAULT_EXPERIENCE_WEIGHT,
     DEFAULT_PREFERRED_SKILL_WEIGHT,
+    DEFAULT_RENORMALIZE_WEIGHTS,
     DEFAULT_REQUIRED_SKILL_WEIGHT,
     DEFAULT_SEMANTIC_SIMILARITY_WEIGHT,
     EMBEDDING_MODEL_NAME,
@@ -42,6 +44,15 @@ from src.schemas import (
     WeightConfig,
 )
 from src.skill_extractor import TechnicalSkillExtractor
+
+
+def verify_schemas_path(repo_root: Path, schemas_file: Path) -> bool:
+    """Verifies that schemas.py is loaded from inside repo_root."""
+    try:
+        schemas_file.resolve().relative_to(repo_root.resolve())
+        return True
+    except ValueError:
+        return False
 
 # Cached singleton instances for CPU inference efficiency
 _SKILL_EXTRACTOR: Optional[TechnicalSkillExtractor] = None
@@ -80,6 +91,12 @@ def get_related_skills_map() -> dict[str, dict[str, float]]:
     return _RELATED_SKILLS_MAP
 
 
+def compute_text_hash(text: str) -> str:
+    """Computes a normalized SHA-256 hash of plain text to detect duplicate documents."""
+    normalized = " ".join(text.lower().split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
 RESUME_EXP_PATTERNS = [
     r"(\d+(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)\b(?:\s+of)?(?:\s+[a-z]+)*\s+experience(?!\s+(?:old|of\s+age)\b)",
     r"(?:past|last)\s+(\d+(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)\b",
@@ -104,7 +121,7 @@ def extract_candidate_experience_years(text: str) -> Optional[float]:
 
 
 def analyze_job(text: str) -> JobAnalysis:
-    """Parses a job description to extract required/preferred skills and experience.
+    """Parses a job description to extract required/preferred skills, experience, and multi-job warnings.
 
     Args:
         text: Raw text of the target job description.
@@ -120,17 +137,33 @@ def analyze_job(text: str) -> JobAnalysis:
             preferred_skills=[],
             all_skills=[],
             min_experience_years=None,
+            has_multiple_jobs=False,
+            multiple_jobs_warning=None,
         )
 
     parsed = parse_job_description(text)
     cleaned = clean_text(text)
+
+    # Extract job title if present
+    job_title = None
+    for line in text.splitlines():
+        line_clean = line.strip()
+        if line_clean.lower().startswith("job title:"):
+            job_title = line_clean.split(":", 1)[1].strip()
+            break
+        elif line_clean and not job_title and len(line_clean) < 60:
+            job_title = line_clean
+
     return JobAnalysis(
         raw_text=text,
         cleaned_text=cleaned,
+        job_title=job_title,
         required_skills=parsed.get("required_skills", []),
         preferred_skills=parsed.get("preferred_skills", []),
         all_skills=parsed.get("all_skills", []),
         min_experience_years=parsed.get("min_experience_years"),
+        has_multiple_jobs=parsed.get("has_multiple_jobs", False),
+        multiple_jobs_warning=parsed.get("multiple_jobs_warning"),
     )
 
 
@@ -138,6 +171,8 @@ def parse_resumes(
     files: list[Union[str, Path, BinaryIO, io.BytesIO, Any]]
 ) -> list[ParsedResume]:
     """Ingests and parses resume files or streams into structured ParsedResume models.
+
+    Detects duplicate documents via normalized text hashing.
 
     Args:
         files: List of file paths or binary stream objects (e.g. UploadedFile).
@@ -153,6 +188,7 @@ def parse_resumes(
 
     extractor = get_skill_extractor()
     results: list[ParsedResume] = []
+    seen_hashes: dict[str, str] = {}
 
     for f in files:
         filename = "resume.pdf"
@@ -181,6 +217,17 @@ def parse_resumes(
 
         anonymized = anonymize_text(raw_text)
 
+        # Duplicate detection by text hash
+        t_hash = compute_text_hash(raw_text) if raw_text.strip() else None
+        if t_hash and t_hash in seen_hashes:
+            is_dup = True
+            dup_of = seen_hashes[t_hash]
+        else:
+            is_dup = False
+            dup_of = None
+            if t_hash:
+                seen_hashes[t_hash] = filename
+
         results.append(
             ParsedResume(
                 filename=filename,
@@ -190,10 +237,81 @@ def parse_resumes(
                 skills=skills,
                 experience_years=exp_years,
                 anonymized_text=anonymized,
+                text_hash=t_hash,
+                is_duplicate=is_dup,
+                duplicate_of=dup_of,
             )
         )
 
     return results
+
+
+def get_applicable_components(
+    job: JobAnalysis,
+    weights: WeightConfig,
+) -> tuple[list[str], list[str], dict[str, float], Optional[str]]:
+    """Determines applicable scoring components and rescales weights when enabled.
+
+    Applicable components:
+    - required: if the job has required skills
+    - preferred: if the job has preferred skills
+    - experience: if the job states a minimum years
+    - semantic: always applicable
+
+    Returns:
+        (applicable_list, non_applicable_list, effective_weights_dict, redistribution_note)
+    """
+    applicable: list[str] = []
+    if job.required_skills:
+        applicable.append("required")
+    if job.preferred_skills:
+        applicable.append("preferred")
+    if job.min_experience_years is not None and job.min_experience_years > 0.0:
+        applicable.append("experience")
+    applicable.append("semantic")  # semantic is always applicable
+
+    all_components = ["required", "preferred", "semantic", "experience"]
+    non_applicable = [c for c in ["required", "preferred", "experience"] if c not in applicable]
+
+    user_weights = {
+        "required": weights.required_skill_weight,
+        "preferred": weights.preferred_skill_weight,
+        "semantic": weights.semantic_weight,
+        "experience": weights.experience_weight,
+    }
+
+    if weights.renormalize_weights:
+        s = sum(user_weights[c] for c in applicable)
+        if s > 0:
+            effective_weights = {
+                c: (round(user_weights[c] / s, 4) if c in applicable else 0.0)
+                for c in user_weights
+            }
+            # Reconcile rounding discrepancy on largest applicable component
+            diff = round(1.0 - sum(effective_weights[c] for c in applicable), 4)
+            if abs(diff) > 0 and applicable:
+                largest = max(applicable, key=lambda c: effective_weights[c])
+                effective_weights[largest] = round(effective_weights[largest] + diff, 4)
+        else:
+            effective_weights = {c: 0.0 for c in user_weights}
+    else:
+        effective_weights = dict(user_weights)
+
+    # Note generation
+    note: Optional[str] = None
+    if non_applicable and weights.renormalize_weights:
+        name_map = {
+            "required": "Required skills",
+            "preferred": "Preferred skills",
+            "experience": "Minimum experience",
+        }
+        parts = [name_map[c] for c in non_applicable if c in name_map]
+        if len(parts) == 1:
+            note = f"{parts[0]} was not specified, so its weight was redistributed across the applicable components."
+        elif len(parts) > 1:
+            note = f"{' and '.join(parts)} were not specified, so their weights were redistributed across the applicable components."
+
+    return applicable, non_applicable, effective_weights, note
 
 
 def rank(
@@ -202,6 +320,10 @@ def rank(
     weights: Optional[Union[WeightConfig, dict[str, Any]]] = None,
 ) -> list[CandidateRanking]:
     """Ranks candidates using 4-component weighted scoring and TF-IDF baseline.
+
+    When weights.renormalize_weights is True, rescales weights across applicable
+    components only, and assigns None ("N/A") to non-applicable components.
+    Candidates with identical match scores receive competition tie ranks (e.g. 'T-2').
 
     Args:
         job: Target job description as JobAnalysis, plain text string, or dictionary.
@@ -230,8 +352,12 @@ def rank(
     else:
         weight_cfg = weights
 
+    # Determine applicable components and effective weights
+    app_components, non_app_components, eff_weights, _ = get_applicable_components(job_obj, weight_cfg)
+
     # 3. Normalize Resumes
     parsed_resumes: list[ParsedResume] = []
+    seen_hashes: dict[str, str] = {}
     for r in resumes:
         if isinstance(r, dict):
             d = dict(r)
@@ -239,9 +365,21 @@ def rank(
                 d["filename"] = d["name"]
             if "raw_text" not in d and "text" in d:
                 d["raw_text"] = d["text"]
-            parsed_resumes.append(ParsedResume(**d))
+            pr_item = ParsedResume(**d)
         else:
-            parsed_resumes.append(r)
+            pr_item = r
+
+        if not pr_item.text_hash and pr_item.raw_text.strip():
+            pr_item.text_hash = compute_text_hash(pr_item.raw_text)
+
+        if pr_item.text_hash:
+            if pr_item.text_hash in seen_hashes:
+                pr_item.is_duplicate = True
+                pr_item.duplicate_of = seen_hashes[pr_item.text_hash]
+            else:
+                seen_hashes[pr_item.text_hash] = pr_item.filename
+
+        parsed_resumes.append(pr_item)
 
     extractor = get_skill_extractor()
     model = get_sentence_model()
@@ -316,21 +454,23 @@ def rank(
         c_text = cand_sem_texts[i]
 
         if not c_text:
-            # Empty candidate text -> exact 0.0 across all components
+            # Empty candidate text -> exact 0.0 across all applicable components
             below_min = (
-                job_obj.min_experience_years is not None
+                "experience" in app_components
+                and job_obj.min_experience_years is not None
                 and job_obj.min_experience_years > 0.0
             )
             comp = ComponentScores(
-                required_skill_score=0.0,
-                preferred_skill_score=0.0,
+                required_skill_score=0.0 if "required" in app_components or not weight_cfg.renormalize_weights else None,
+                preferred_skill_score=0.0 if "preferred" in app_components or not weight_cfg.renormalize_weights else None,
                 semantic_score=0.0,
-                experience_score=0.0,
+                experience_score=0.0 if "experience" in app_components or not weight_cfg.renormalize_weights else None,
                 tfidf_baseline_score=0.0,
             )
             rankings.append(
                 CandidateRanking(
                     rank=1,
+                    rank_display="1",
                     candidate=pr.filename,
                     match_score=0.0,
                     component_scores=comp,
@@ -341,24 +481,27 @@ def rank(
                     missing_required_skills=list(req_skills_set),
                     related_skills_matched=[],
                     below_min_experience=below_min,
+                    is_duplicate=pr.is_duplicate,
+                    duplicate_of=pr.duplicate_of,
+                    text_hash=pr.text_hash,
                 )
             )
             continue
 
         cand_skills_lower = {s.lower(): s for s in pr.skills}
 
-        # Match required skills (case-insensitive lookup, preserve JD skill casing)
+        # Match required skills
         matched_req = [s for s in req_skills_set if s.lower() in cand_skills_lower]
         missing_req = [s for s in req_skills_set if s.lower() not in cand_skills_lower]
 
-        # Match preferred skills (case-insensitive lookup, preserve JD skill casing)
+        # Match preferred skills
         matched_pref = [s for s in pref_skills_set if s.lower() in cand_skills_lower]
         missing_pref = [s for s in pref_skills_set if s.lower() not in cand_skills_lower]
 
         matched_skills = sorted(list(set(matched_req + matched_pref)))
         missing_skills = list(missing_req)
 
-        # Related skills partial credit: unmatched skill earns highest credit from related skills in resume
+        # Related skills partial credit
         related_matches: list[str] = []
         req_related_credit = 0.0
         for s in missing_req:
@@ -386,29 +529,59 @@ def rank(
                 pref_related_credit += best_weight
                 related_matches.append(f"{s} (via {best_rel_skill}: {best_weight})")
 
-        req_score = (len(matched_req) + req_related_credit) / len(req_skills_set) if req_skills_set else 0.0
-        pref_score = (len(matched_pref) + pref_related_credit) / len(pref_skills_set) if pref_skills_set else 0.0
-        req_score = min(1.0, max(0.0, req_score))
-        pref_score = min(1.0, max(0.0, pref_score))
+        # Determine scores per component based on applicability
+        if "required" in app_components:
+            req_score: Optional[float] = (len(matched_req) + req_related_credit) / len(req_skills_set) if req_skills_set else 0.0
+            req_score = min(1.0, max(0.0, req_score))
+            req_score_rounded: Optional[float] = round(req_score, 4)
+        else:
+            if weight_cfg.renormalize_weights:
+                req_score = None
+                req_score_rounded = None
+            else:
+                req_score = 0.0
+                req_score_rounded = 0.0
+
+        if "preferred" in app_components:
+            pref_score: Optional[float] = (len(matched_pref) + pref_related_credit) / len(pref_skills_set) if pref_skills_set else 0.0
+            pref_score = min(1.0, max(0.0, pref_score))
+            pref_score_rounded: Optional[float] = round(pref_score, 4)
+        else:
+            if weight_cfg.renormalize_weights:
+                pref_score = None
+                pref_score_rounded = None
+            else:
+                pref_score = 0.0
+                pref_score_rounded = 0.0
 
         sem_score = semantic_scores[i]
+        sem_score_rounded = round(sem_score, 4)
 
-        # Experience score and minimum experience gate check
-        if job_obj.min_experience_years is None or job_obj.min_experience_years <= 0.0:
-            exp_score = 1.0
-            below_min = False
-        else:
+        if "experience" in app_components:
             cand_exp = pr.experience_years or 0.0
-            exp_score = min(1.0, max(0.0, cand_exp) / job_obj.min_experience_years)
+            exp_score: Optional[float] = min(1.0, max(0.0, cand_exp / job_obj.min_experience_years))
+            exp_score_rounded: Optional[float] = round(exp_score, 4)
             below_min = cand_exp < job_obj.min_experience_years
+        else:
+            if weight_cfg.renormalize_weights:
+                exp_score = None
+                exp_score_rounded = None
+                below_min = False
+            else:
+                exp_score = 1.0
+                exp_score_rounded = 1.0
+                below_min = False
 
-        # Composite score calculation (immunized against ZeroDivisionError)
-        composite = (
-            weight_cfg.required_skill_weight * req_score
-            + weight_cfg.preferred_skill_weight * pref_score
-            + weight_cfg.semantic_weight * sem_score
-            + weight_cfg.experience_weight * exp_score
-        )
+        # Composite score calculation using effective weights
+        composite = 0.0
+        if req_score is not None:
+            composite += eff_weights["required"] * req_score
+        if pref_score is not None:
+            composite += eff_weights["preferred"] * pref_score
+        composite += eff_weights["semantic"] * sem_score
+        if exp_score is not None:
+            composite += eff_weights["experience"] * exp_score
+
         raw_score = composite * 100.0
         if below_min:
             raw_score = raw_score * weight_cfg.experience_penalty
@@ -416,16 +589,17 @@ def rank(
         match_score = round(float(np.clip(raw_score, 0.0, 100.0)), 2)
 
         comp = ComponentScores(
-            required_skill_score=round(req_score, 4),
-            preferred_skill_score=round(pref_score, 4),
-            semantic_score=round(sem_score, 4),
-            experience_score=round(exp_score, 4),
+            required_skill_score=req_score_rounded,
+            preferred_skill_score=pref_score_rounded,
+            semantic_score=sem_score_rounded,
+            experience_score=exp_score_rounded,
             tfidf_baseline_score=tfidf_scores[i],
         )
 
         rankings.append(
             CandidateRanking(
                 rank=1,
+                rank_display="1",
                 candidate=pr.filename,
                 match_score=match_score,
                 component_scores=comp,
@@ -436,13 +610,31 @@ def rank(
                 missing_required_skills=missing_req,
                 related_skills_matched=related_matches,
                 below_min_experience=below_min,
+                is_duplicate=pr.is_duplicate,
+                duplicate_of=pr.duplicate_of,
+                text_hash=pr.text_hash,
             )
         )
 
     # Sort descending by match_score
     rankings.sort(key=lambda r: r.match_score, reverse=True)
-    for rank_idx, r in enumerate(rankings, start=1):
-        r.rank = rank_idx
+
+    # Assign competition ranks with tie detection (e.g. 1, T-2, T-2, 4)
+    current_rank = 1
+    idx = 0
+    n = len(rankings)
+    while idx < n:
+        j = idx
+        while j < n and abs(rankings[j].match_score - rankings[idx].match_score) < 1e-5:
+            j += 1
+        group_size = j - idx
+        is_tie = group_size > 1
+        display_str = f"T-{current_rank}" if is_tie else str(current_rank)
+        for k in range(idx, j):
+            rankings[k].rank = current_rank
+            rankings[k].rank_display = display_str
+        current_rank += group_size
+        idx = j
 
     return rankings
 
@@ -460,19 +652,32 @@ def screen(
         weights: Optional scoring weights configuration.
 
     Returns:
-        ScreeningResult containing job analysis, candidate rankings, and total count.
+        ScreeningResult containing job analysis, candidate rankings, total count,
+        effective weights, and redistribution note.
     """
     if isinstance(job, str):
         job_obj = analyze_job(job)
     else:
         job_obj = job
 
+    if weights is None:
+        weight_cfg = WeightConfig()
+    elif isinstance(weights, dict):
+        weight_cfg = WeightConfig(**weights)
+    else:
+        weight_cfg = weights
+
+    app_comp, non_app_comp, eff_w, note = get_applicable_components(job_obj, weight_cfg)
     parsed_resumes = parse_resumes(files)
-    rankings = rank(job=job_obj, resumes=parsed_resumes, weights=weights)
+    rankings = rank(job=job_obj, resumes=parsed_resumes, weights=weight_cfg)
+
     return ScreeningResult(
         job=job_obj,
         rankings=rankings,
         total_resumes=len(parsed_resumes),
+        effective_weights=eff_w,
+        non_applicable_components=non_app_comp,
+        weight_redistribution_note=note,
     )
 
 
@@ -481,6 +686,9 @@ def build_recommendation(
     job: Optional[JobAnalysis] = None,
 ) -> Recommendation:
     """Builds a deterministic candidate recommendation from evaluation results without LLM.
+
+    Handles ties for 1st place and tied runner-ups, duplicate candidate warnings,
+    and excludes non-applicable components from strongest component / gaps.
 
     Args:
         rankings: Sorted list of candidate rankings.
@@ -494,7 +702,11 @@ def build_recommendation(
             best_candidate=None,
             best_score=None,
             runner_up=None,
+            runner_up_score=None,
             margin_over_runner_up=None,
+            missing_skills=[],
+            is_tie=False,
+            tied_candidates=[],
             strengths=[],
             gaps=[],
             warnings=["No candidates were evaluated."],
@@ -504,41 +716,69 @@ def build_recommendation(
     top = rankings[0]
     best_candidate = top.candidate
     best_score = top.match_score
+    missing_skills = list(top.missing_required_skills)
 
-    # Runner-up and margin calculation
-    if len(rankings) == 1:
+    # Check ties for top position
+    top_ties = [r for r in rankings if abs(r.match_score - top.match_score) < 1e-5]
+
+    if len(top_ties) > 1:
+        # Tied for #1: do not name an arbitrary runner up
         runner_up = None
+        runner_up_score = None
+        margin_over_runner_up = 0.0
+        is_tie = True
+        tied_candidates = [r.candidate for r in top_ties]
+        other_names = ", ".join(r.candidate for r in top_ties if r.candidate != top.candidate)
+        comparison_text = f"Tied for top position with {other_names} ({top.match_score:.1f}%)."
+    elif len(rankings) == 1:
+        runner_up = None
+        runner_up_score = None
         margin_over_runner_up = None
+        is_tie = False
+        tied_candidates = [best_candidate]
         comparison_text = f"{best_candidate} was the sole candidate evaluated."
     else:
         second = rankings[1]
-        runner_up = second.candidate
+        second_ties = [r for r in rankings[1:] if abs(r.match_score - second.match_score) < 1e-5]
         margin = round(top.match_score - second.match_score, 2)
         margin_over_runner_up = margin
-        if margin == 0.0:
-            comparison_text = f"Tied for top position with {runner_up} ({second.match_score:.1f}%)."
+        runner_up_score = second.match_score
+        is_tie = False
+        tied_candidates = [best_candidate]
+        if len(second_ties) > 1:
+            # Tied runners-up: do not name an arbitrary runner-up
+            tied_names = ", ".join(r.candidate for r in second_ties)
+            runner_up = f"{tied_names} (Tied)"
+            comparison_text = f"Outperforms tied runners-up {tied_names} ({second.match_score:.1f}%) by a margin of {margin:.1f} pts."
         else:
-            comparison_text = f"Outperforms runner-up {runner_up} ({second.match_score:.1f}%) by a margin of {margin:.1f} percentage points."
+            runner_up = second.candidate
+            comparison_text = f"Outperforms runner-up {runner_up} ({second.match_score:.1f}%) by a margin of {margin:.1f} pts."
 
-    # Strengths
+    # Strengths: only consider applicable components (score is not None)
     strengths: list[str] = []
     if top.matched_required_skills:
         strengths.append(f"Matched required skills: {', '.join(top.matched_required_skills)}")
     if top.matched_preferred_skills:
         strengths.append(f"Matched preferred skills: {', '.join(top.matched_preferred_skills)}")
 
-    comp_scores = {
-        "Required Skills": top.component_scores.required_skill_score * 100.0,
-        "Preferred Skills": top.component_scores.preferred_skill_score * 100.0,
-        "Semantic Similarity": top.component_scores.semantic_score * 100.0,
-        "Experience Match": top.component_scores.experience_score * 100.0,
-    }
-    strongest_name, strongest_val = max(comp_scores.items(), key=lambda item: item[1])
-    strengths.append(f"Strongest scoring component: {strongest_name} ({strongest_val:.1f}%)")
+    comp_scores: dict[str, float] = {}
+    if top.component_scores.required_skill_score is not None:
+        comp_scores["Required Skills"] = top.component_scores.required_skill_score * 100.0
+    if top.component_scores.preferred_skill_score is not None:
+        comp_scores["Preferred Skills"] = top.component_scores.preferred_skill_score * 100.0
+    comp_scores["Semantic Similarity"] = top.component_scores.semantic_score * 100.0
+    if top.component_scores.experience_score is not None:
+        comp_scores["Experience Match"] = top.component_scores.experience_score * 100.0
 
-    # Gaps
+    if comp_scores:
+        strongest_name, strongest_val = max(comp_scores.items(), key=lambda item: item[1])
+        strengths.append(f"Strongest scoring component: {strongest_name} ({strongest_val:.1f}%)")
+
+    # Gaps: do not list non-applicable components as gaps
     gaps: list[str] = []
-    if top.missing_required_skills:
+    if job and not job.required_skills:
+        gaps.append("None — required skills were not specified for this role.")
+    elif top.missing_required_skills:
         gaps.append(f"Missing required skills: {', '.join(top.missing_required_skills)}")
     else:
         gaps.append("None — possesses all mandatory required skills.")
@@ -558,25 +798,56 @@ def build_recommendation(
     if has_reqs and no_candidate_fully_meets:
         warnings.append("No candidate fully meets the requirements; best available match.")
 
+    # Duplicate resume warnings
+    if top.is_duplicate:
+        warnings.append(f"Probable duplicate resume: {top.candidate} has identical content to {top.duplicate_of}.")
+    cohort_dups = [f"{r.candidate} (duplicate of {r.duplicate_of})" for r in rankings if r.is_duplicate and r.candidate != top.candidate]
+    if cohort_dups:
+        warnings.append(f"Probable duplicate resumes detected: {', '.join(cohort_dups)}.")
+
+    # Multi-job posting warning if detected
+    if job and job.has_multiple_jobs and job.multiple_jobs_warning:
+        warnings.append(job.multiple_jobs_warning)
+
     # Summary text
     summary_parts = [
         f"{best_candidate} is the recommended top candidate with a composite score of {best_score:.1f}%.",
         comparison_text,
     ]
-    if top.matched_required_skills:
+
+    is_partial_fit = (best_score < 50.0) or bool(top.missing_required_skills) or bool(top.below_min_experience)
+
+    if is_partial_fit:
+        missing_reasons: list[str] = []
+        if top.missing_required_skills:
+            missing_reasons.append(f"missing required skills: {', '.join(top.missing_required_skills)}")
+        if top.below_min_experience:
+            min_exp_note = f" ({job.min_experience_years:.1f}+ years required)" if (job and job.min_experience_years) else ""
+            missing_reasons.append(f"falls below the minimum required experience{min_exp_note}")
+        if best_score < 50.0 and not top.missing_required_skills and not top.below_min_experience:
+            missing_reasons.append(f"composite score below 50% ({best_score:.1f}%)")
+
+        missing_details = f" ({'; '.join(missing_reasons)})" if missing_reasons else ""
+        summary_parts.append(
+            f"Rated as best available match, partial fit{missing_details}."
+        )
+    else:
         total_reqs = len(job.required_skills) if job and job.required_skills else len(top.matched_required_skills)
         summary_parts.append(
             f"Demonstrates strong alignment matching {len(top.matched_required_skills)}/{total_reqs} required skills."
         )
-    if top.below_min_experience:
-        summary_parts.append("Note: Candidate falls below the minimum required experience.")
+
     summary_text = " ".join(summary_parts)
 
     return Recommendation(
         best_candidate=best_candidate,
         best_score=best_score,
         runner_up=runner_up,
+        runner_up_score=runner_up_score,
         margin_over_runner_up=margin_over_runner_up,
+        missing_skills=missing_skills,
+        is_tie=is_tie,
+        tied_candidates=tied_candidates,
         strengths=strengths,
         gaps=gaps,
         warnings=warnings,
@@ -587,33 +858,67 @@ def build_recommendation(
 def get_score_contributions(
     candidate: CandidateRanking,
     weights: Optional[WeightConfig] = None,
-) -> dict[str, float]:
+    job: Optional[JobAnalysis] = None,
+) -> dict[str, Any]:
     """Computes the weighted contribution of each component in percentage points.
 
     Scales components by the experience penalty if below_min_experience is True,
-    ensuring the contributions sum exactly to candidate.match_score.
+    ensuring applicable contributions sum exactly to candidate.match_score.
+    Non-applicable components are returned as None ("N/A").
     """
     if weights is None:
         weights = WeightConfig()
 
     penalty = weights.experience_penalty if candidate.below_min_experience else 1.0
 
-    raw_req = candidate.component_scores.required_skill_score * weights.required_skill_weight * 100.0
-    raw_pref = candidate.component_scores.preferred_skill_score * weights.preferred_skill_weight * 100.0
-    raw_sem = candidate.component_scores.semantic_score * weights.semantic_weight * 100.0
-    raw_exp = candidate.component_scores.experience_score * weights.experience_weight * 100.0
+    if job is not None:
+        app_list, _, eff_weights, _ = get_applicable_components(job, weights)
+    else:
+        # Determine from candidate scores
+        app_list = ["semantic"]
+        if candidate.component_scores.required_skill_score is not None:
+            app_list.append("required")
+        if candidate.component_scores.preferred_skill_score is not None:
+            app_list.append("preferred")
+        if candidate.component_scores.experience_score is not None:
+            app_list.append("experience")
+
+        user_w = {
+            "required": weights.required_skill_weight,
+            "preferred": weights.preferred_skill_weight,
+            "semantic": weights.semantic_weight,
+            "experience": weights.experience_weight,
+        }
+        if weights.renormalize_weights:
+            s = sum(user_w[c] for c in app_list)
+            eff_weights = {c: (user_w[c] / s if s > 0 and c in app_list else 0.0) for c in user_w}
+        else:
+            eff_weights = dict(user_w)
+
+    raw_req = (candidate.component_scores.required_skill_score or 0.0) * eff_weights["required"] * 100.0 if "required" in app_list else 0.0
+    raw_pref = (candidate.component_scores.preferred_skill_score or 0.0) * eff_weights["preferred"] * 100.0 if "preferred" in app_list else 0.0
+    raw_sem = candidate.component_scores.semantic_score * eff_weights["semantic"] * 100.0
+    raw_exp = (candidate.component_scores.experience_score or 0.0) * eff_weights["experience"] * 100.0 if "experience" in app_list else 0.0
 
     req_contrib = round(raw_req * penalty, 2)
     pref_contrib = round(raw_pref * penalty, 2)
     sem_contrib = round(raw_sem * penalty, 2)
     exp_contrib = round(raw_exp * penalty, 2)
 
-    # Reconcile rounding discrepancy against candidate.match_score
+    # Reconcile rounding discrepancy against candidate.match_score on largest applicable component
     diff = round(candidate.match_score - (req_contrib + pref_contrib + sem_contrib + exp_contrib), 2)
     if abs(diff) > 0:
-        components = [("required", req_contrib), ("preferred", pref_contrib), ("semantic", sem_contrib), ("experience", exp_contrib)]
-        components.sort(key=lambda x: x[1], reverse=True)
-        largest = components[0][0]
+        candidates_to_adjust = []
+        if "required" in app_list:
+            candidates_to_adjust.append(("required", req_contrib))
+        if "preferred" in app_list:
+            candidates_to_adjust.append(("preferred", pref_contrib))
+        candidates_to_adjust.append(("semantic", sem_contrib))
+        if "experience" in app_list:
+            candidates_to_adjust.append(("experience", exp_contrib))
+
+        candidates_to_adjust.sort(key=lambda x: x[1], reverse=True)
+        largest = candidates_to_adjust[0][0]
         if largest == "required":
             req_contrib = round(req_contrib + diff, 2)
         elif largest == "preferred":
@@ -627,11 +932,17 @@ def get_score_contributions(
     penalty_deduction = round(unpenalized_total - candidate.match_score, 2) if candidate.below_min_experience else 0.0
 
     return {
-        "required_skills": req_contrib,
-        "preferred_skills": pref_contrib,
+        "required_skills": req_contrib if "required" in app_list else None,
+        "preferred_skills": pref_contrib if "preferred" in app_list else None,
         "semantic_similarity": sem_contrib,
-        "experience_match": exp_contrib,
-        "total_contribution": round(req_contrib + pref_contrib + sem_contrib + exp_contrib, 2),
+        "experience_match": exp_contrib if "experience" in app_list else None,
+        "total_contribution": round(
+            (req_contrib if "required" in app_list else 0.0)
+            + (pref_contrib if "preferred" in app_list else 0.0)
+            + sem_contrib
+            + (exp_contrib if "experience" in app_list else 0.0),
+            2,
+        ),
         "composite_score": candidate.match_score,
         "experience_penalty_applied": penalty,
         "penalty_deduction": penalty_deduction,
@@ -646,7 +957,10 @@ def get_overall_ranking_chart_data(rankings: list[CandidateRanking]) -> list[dic
             "score": r.match_score,
             "label": f"{r.match_score:.1f}%",
             "rank": r.rank,
+            "rank_display": r.rank_display or str(r.rank),
             "color_category": "Top Candidate" if r.rank == 1 else "Candidate",
+            "is_duplicate": r.is_duplicate,
+            "duplicate_of": r.duplicate_of,
         }
         for r in rankings
     ]
@@ -655,32 +969,35 @@ def get_overall_ranking_chart_data(rankings: list[CandidateRanking]) -> list[dic
 def get_score_composition_chart_data(
     rankings: list[CandidateRanking],
     weights: Optional[WeightConfig] = None,
+    job: Optional[JobAnalysis] = None,
 ) -> list[dict[str, Any]]:
-    """Formats 4-component weighted contributions into stacked chart data records."""
+    """Formats weighted contributions into stacked chart data records for applicable components."""
     if weights is None:
         weights = WeightConfig()
 
     records: list[dict[str, Any]] = []
     for r in rankings:
-        contribs = get_score_contributions(r, weights)
+        contribs = get_score_contributions(r, weights, job)
         penalty_note = f" (Penalty: ×{contribs['experience_penalty_applied']:.2f})" if r.below_min_experience else ""
 
-        records.append({
-            "candidate": r.candidate,
-            "component": "1. Required Skills",
-            "contribution": contribs["required_skills"],
-            "percentage_label": f"{contribs['required_skills']:.1f}%",
-            "below_min_experience": r.below_min_experience,
-            "penalty_note": penalty_note,
-        })
-        records.append({
-            "candidate": r.candidate,
-            "component": "2. Preferred Skills",
-            "contribution": contribs["preferred_skills"],
-            "percentage_label": f"{contribs['preferred_skills']:.1f}%",
-            "below_min_experience": r.below_min_experience,
-            "penalty_note": penalty_note,
-        })
+        if contribs["required_skills"] is not None:
+            records.append({
+                "candidate": r.candidate,
+                "component": "1. Required Skills",
+                "contribution": contribs["required_skills"],
+                "percentage_label": f"{contribs['required_skills']:.1f}%",
+                "below_min_experience": r.below_min_experience,
+                "penalty_note": penalty_note,
+            })
+        if contribs["preferred_skills"] is not None:
+            records.append({
+                "candidate": r.candidate,
+                "component": "2. Preferred Skills",
+                "contribution": contribs["preferred_skills"],
+                "percentage_label": f"{contribs['preferred_skills']:.1f}%",
+                "below_min_experience": r.below_min_experience,
+                "penalty_note": penalty_note,
+            })
         records.append({
             "candidate": r.candidate,
             "component": "3. Semantic Match",
@@ -689,14 +1006,15 @@ def get_score_composition_chart_data(
             "below_min_experience": r.below_min_experience,
             "penalty_note": penalty_note,
         })
-        records.append({
-            "candidate": r.candidate,
-            "component": "4. Experience Match",
-            "contribution": contribs["experience_match"],
-            "percentage_label": f"{contribs['experience_match']:.1f}%",
-            "below_min_experience": r.below_min_experience,
-            "penalty_note": penalty_note,
-        })
+        if contribs["experience_match"] is not None:
+            records.append({
+                "candidate": r.candidate,
+                "component": "4. Experience Match",
+                "contribution": contribs["experience_match"],
+                "percentage_label": f"{contribs['experience_match']:.1f}%",
+                "below_min_experience": r.below_min_experience,
+                "penalty_note": penalty_note,
+            })
     return records
 
 
@@ -735,10 +1053,23 @@ def get_skill_matrix_chart_data(
 def get_candidate_breakdown_chart_data(candidate: CandidateRanking) -> list[dict[str, Any]]:
     """Formats individual candidate component percentages for horizontal bar rendering."""
     tfidf = candidate.component_scores.tfidf_baseline_score or 0.0
-    return [
-        {"component": "Required Skills", "percentage": round(candidate.component_scores.required_skill_score * 100.0, 1)},
-        {"component": "Preferred Skills", "percentage": round(candidate.component_scores.preferred_skill_score * 100.0, 1)},
-        {"component": "Semantic Match", "percentage": round(candidate.component_scores.semantic_score * 100.0, 1)},
-        {"component": "Experience Match", "percentage": round(candidate.component_scores.experience_score * 100.0, 1)},
-        {"component": "TF-IDF Baseline", "percentage": round(tfidf * 100.0, 1)},
-    ]
+    items = []
+    if candidate.component_scores.required_skill_score is not None:
+        items.append({"component": "Required Skills", "percentage": round(candidate.component_scores.required_skill_score * 100.0, 1)})
+    else:
+        items.append({"component": "Required Skills", "percentage": None, "display": "N/A"})
+
+    if candidate.component_scores.preferred_skill_score is not None:
+        items.append({"component": "Preferred Skills", "percentage": round(candidate.component_scores.preferred_skill_score * 100.0, 1)})
+    else:
+        items.append({"component": "Preferred Skills", "percentage": None, "display": "N/A"})
+
+    items.append({"component": "Semantic Match", "percentage": round(candidate.component_scores.semantic_score * 100.0, 1)})
+
+    if candidate.component_scores.experience_score is not None:
+        items.append({"component": "Experience Match", "percentage": round(candidate.component_scores.experience_score * 100.0, 1)})
+    else:
+        items.append({"component": "Experience Match", "percentage": None, "display": "N/A"})
+
+    items.append({"component": "TF-IDF Baseline", "percentage": round(tfidf * 100.0, 1)})
+    return items

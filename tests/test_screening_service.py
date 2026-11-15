@@ -26,6 +26,7 @@ from src.schemas import (
 from src.services.screening_service import (
     analyze_job,
     extract_candidate_experience_years,
+    get_applicable_components,
     parse_resumes,
     rank,
     screen,
@@ -378,3 +379,98 @@ def test_screen_pipeline_returns_screening_result() -> None:
     assert isinstance(result.job, JobAnalysis)
     assert result.rankings == []
     assert result.total_resumes == 0
+
+
+def test_applicable_components_weight_redistribution() -> None:
+    """Verifies weight redistribution when preferred skills or minimum experience are omitted."""
+    # JD with only required skills and no preferred / no experience
+    job = analyze_job("Python Developer. Required: Python, Django.")
+    weights = WeightConfig(
+        required_skill_weight=0.50,
+        preferred_skill_weight=0.20,
+        semantic_weight=0.20,
+        experience_weight=0.10,
+        renormalize_weights=True,
+    )
+    app, non_app, eff_weights, note = get_applicable_components(job, weights)
+    assert set(app) == {"required", "semantic"}
+    assert set(non_app) == {"preferred", "experience"}
+    assert round(sum(eff_weights.values()), 4) == 1.0
+    assert eff_weights["preferred"] == 0.0
+    assert eff_weights["experience"] == 0.0
+    assert eff_weights["required"] > 0.50
+    assert eff_weights["semantic"] > 0.20
+    assert note is not None
+    assert "Preferred skills" in note and "Minimum experience" in note
+
+    # Ablation: renormalize_weights=False keeps raw user weights
+    weights_raw = WeightConfig(renormalize_weights=False)
+    _, _, eff_raw, note_raw = get_applicable_components(job, weights_raw)
+    assert eff_raw["required"] == 0.50
+    assert eff_raw["preferred"] == 0.20
+    assert note_raw is None
+
+
+def test_tie_competition_ranking_and_display() -> None:
+    """Verifies competition tie ranking (e.g. T-2) and runner-up suppression."""
+    jd = analyze_job("Engineer. Required: Python.")
+    cand1 = ParsedResume(
+        filename="cand1.txt",
+        raw_text="Top candidate with Python and extensive background.",
+        cleaned_text="Top candidate with Python and extensive background.",
+        skills=["Python"],
+        experience_years=4.0,
+    )
+    cand2 = ParsedResume(
+        filename="cand2.txt",
+        raw_text="Candidate two with Python.",
+        cleaned_text="Candidate two with Python.",
+        skills=["Python"],
+        experience_years=2.0,
+    )
+    cand3 = ParsedResume(
+        filename="cand3.txt",
+        raw_text="Candidate three with Python.",
+        cleaned_text="Candidate three with Python.",
+        skills=["Python"],
+        experience_years=2.0,
+    )
+    # Give cand2 and cand3 identical scores by forcing equal inputs
+    cand3.raw_text = cand2.raw_text
+    cand3.cleaned_text = cand2.cleaned_text
+
+    rankings = rank(job=jd, resumes=[cand1, cand2, cand3])
+    assert len(rankings) == 3
+    # Cand 2 and 3 should tie
+    if rankings[1].match_score == rankings[2].match_score:
+        assert rankings[1].rank_display == "T-2"
+        assert rankings[2].rank_display == "T-2"
+
+
+def test_duplicate_resume_detection_by_text_hash() -> None:
+    """Verifies SHA-256 text hashing detects exact duplicate resume contents."""
+    sample_file = Path(__file__).resolve().parent.parent / "data" / "resumes" / "resume_01.pdf"
+    parsed = parse_resumes([sample_file, sample_file])
+    assert len(parsed) == 2
+    assert parsed[0].is_duplicate is False
+    assert parsed[0].duplicate_of is None
+    assert parsed[1].is_duplicate is True
+    assert parsed[1].duplicate_of == parsed[0].filename
+    assert parsed[0].text_hash == parsed[1].text_hash
+
+
+def test_multiple_jobs_warning_detection() -> None:
+    """Verifies non-blocking warning when JD appears to contain multiple postings."""
+    multi_jd = """
+    Job 1: Senior Backend Developer
+    Required: Python, PostgreSQL
+    5 years experience.
+
+    Job 2: Frontend Engineer
+    Required: React, TypeScript
+    3 years experience.
+    """
+    job = analyze_job(multi_jd)
+    assert job.has_multiple_jobs is True
+    assert job.multiple_jobs_warning is not None
+    assert "multiple" in job.multiple_jobs_warning.lower()

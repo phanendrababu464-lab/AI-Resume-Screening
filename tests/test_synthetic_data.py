@@ -82,11 +82,12 @@ class TestRepositoryCleanliness:
         "README.md",
         "requirements.txt",
         "run_app.sh",
+        "run_web.sh",
     }
 
     ALLOWED_ROOT_DIRS = {
-        "app",
         "data",
+        "frontend",
         "src",
         "tests",
         "docs",
@@ -128,7 +129,9 @@ class TestRepositoryCleanliness:
                 )
 
     def test_allowed_root_entries(self) -> None:
-        """Verifies repository root contains only authorized folders and files."""
+        """Verifies repository root contains only authorized folders and files, and Streamlit is retired."""
+        assert not (BASE_DIR / "app").exists(), "Streamlit app directory must be retired"
+        assert not (BASE_DIR / "src" / "app.py").exists(), "Legacy Streamlit src/app.py must be retired"
         for item in BASE_DIR.iterdir():
             if item.name in {".venv", ".git"}:
                 continue

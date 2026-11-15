@@ -127,7 +127,12 @@ def test_job_without_minimum_experience_does_not_penalize() -> None:
     )
     r = rank(job=job, resumes=[cand])[0]
     assert r.below_min_experience is False
-    assert r.component_scores.experience_score == 1.0
+    # Under renormalized applicable components, non-applicable experience shows None (N/A)
+    assert r.component_scores.experience_score is None
+
+    # Legacy un-renormalized ablation verifies 1.0
+    r_legacy = rank(job=job, resumes=[cand], weights=WeightConfig(renormalize_weights=False))[0]
+    assert r_legacy.component_scores.experience_score == 1.0
 
 
 def test_scoring_weights_sum_to_one() -> None:

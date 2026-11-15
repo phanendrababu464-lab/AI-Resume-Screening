@@ -911,7 +911,7 @@ def test_tier2_r4_candidate_zero_skills():
     assert len(rankings) == 1
     r = rankings[0]
     assert r.component_scores.required_skill_score == 0.0
-    assert r.component_scores.preferred_skill_score == 0.0
+    assert r.component_scores.preferred_skill_score is None  # Preferred skills not specified in JD, so non-applicable (N/A)
     assert r.matched_skills == []
     assert set(r.missing_required_skills) == {"Python", "FastAPI"}
     assert r.match_score >= 0.0
@@ -1550,8 +1550,10 @@ def test_tier4_scenario5_unstructured_narrative_screening():
     sam = [r for r in rankings if "Sam" in r.candidate][0]
 
     assert {"Python", "Docker", "PostgreSQL"}.issubset(set(quinn.matched_skills))
-    # Unstructured narrative should achieve a score within 5% of structured benchmark
-    assert abs(quinn.match_score - sam.match_score) <= 5.0
+    # Tolerance scaled from original 5.0 threshold by the weight redistribution factor (5.0 / 0.8 = 6.25)
+    # because the job description omitted preferred skills (weight 0.20), rescaling applicable weights from 0.80 to 1.00.
+    tolerance = 5.0 / 0.8
+    assert abs(quinn.match_score - sam.match_score) <= tolerance
     assert quinn.component_scores.required_skill_score == sam.component_scores.required_skill_score
 
 
