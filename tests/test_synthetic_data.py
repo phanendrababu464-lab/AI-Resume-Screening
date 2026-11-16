@@ -84,9 +84,11 @@ class TestRepositoryCleanliness:
         "run_app.sh",
         "run_web.sh",
         "pyproject.toml",
+        "vercel.json",
     }
 
     ALLOWED_ROOT_DIRS = {
+        "api",
         "data",
         "frontend",
         "src",
