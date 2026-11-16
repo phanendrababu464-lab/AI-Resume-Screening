@@ -484,6 +484,7 @@ def rank(
                     is_duplicate=pr.is_duplicate,
                     duplicate_of=pr.duplicate_of,
                     text_hash=pr.text_hash,
+                    resume_snippet=(pr.cleaned_text or pr.raw_text or "")[:4000],
                 )
             )
             continue
@@ -613,6 +614,7 @@ def rank(
                 is_duplicate=pr.is_duplicate,
                 duplicate_of=pr.duplicate_of,
                 text_hash=pr.text_hash,
+                resume_snippet=(pr.cleaned_text or pr.raw_text or "")[:4000],
             )
         )
 

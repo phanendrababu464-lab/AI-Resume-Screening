@@ -83,6 +83,7 @@ class TestRepositoryCleanliness:
         "requirements.txt",
         "run_app.sh",
         "run_web.sh",
+        "pyproject.toml",
     }
 
     ALLOWED_ROOT_DIRS = {

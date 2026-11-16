@@ -25,6 +25,11 @@ MAX_RESUMES_PER_BATCH: int = int(os.getenv("MAX_RESUMES_PER_BATCH", "100"))
 MAX_FILE_SIZE_BYTES: int = int(os.getenv("MAX_FILE_SIZE_BYTES", str(5 * 1024 * 1024)))  # 5 MB
 MAX_BATCH_SIZE_BYTES: int = int(os.getenv("MAX_BATCH_SIZE_BYTES", str(200 * 1024 * 1024)))  # 200 MB
 
+# Google Gemini API configuration
+# Accepts either GEMINI_API_KEY (modern standard) or GOOGLE_API_KEY as fallback
+GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
 # Scoring weights for legacy 2-component ranker
 DEFAULT_SEMANTIC_WEIGHT: float = 0.65
 DEFAULT_SKILL_WEIGHT: float = 0.35

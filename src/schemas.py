@@ -88,6 +88,7 @@ class CandidateRanking(BaseModel):
     is_duplicate: bool = False
     duplicate_of: Optional[str] = None
     text_hash: Optional[str] = None
+    resume_snippet: Optional[str] = ""
 
 
 class ScreeningResult(BaseModel):

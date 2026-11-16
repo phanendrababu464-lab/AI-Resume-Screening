@@ -35,6 +35,11 @@ from src.schemas import (
     Recommendation,
     WeightConfig,
 )
+from src.services.gemini_service import (
+    GeminiValidationResult,
+    is_gemini_available,
+    validate_candidate_with_gemini,
+)
 from src.services.screening_service import (
     analyze_job,
     build_recommendation,
@@ -117,6 +122,15 @@ class HealthResponse(BaseModel):
     version: str = "1.0.0"
     service: str = "ai-resume-screening"
     max_resumes_per_batch: int = MAX_RESUMES_PER_BATCH
+    gemini_available: bool = False
+
+
+class ValidateResumeRequest(BaseModel):
+    job_text: str
+    candidate_name: str
+    candidate_text: Optional[str] = ""
+    matched_skills: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
 
 
 class SampleJobItem(BaseModel):
@@ -180,17 +194,36 @@ def get_health() -> HealthResponse:
         version="1.0.0",
         service="ai-resume-screening",
         max_resumes_per_batch=MAX_RESUMES_PER_BATCH,
+        gemini_available=is_gemini_available(),
     )
 
 
 @app.get("/api/config")
 def get_config() -> dict[str, Any]:
-    """Returns runtime configuration limits."""
+    """Returns runtime configuration limits and feature flags."""
     return {
         "max_resumes_per_batch": MAX_RESUMES_PER_BATCH,
         "max_file_size_bytes": MAX_FILE_SIZE_BYTES,
         "max_batch_size_bytes": MAX_BATCH_SIZE_BYTES,
+        "gemini_available": is_gemini_available(),
     }
+
+
+@app.post("/api/resumes/validate", response_model=GeminiValidationResult)
+def validate_resume_endpoint(payload: ValidateResumeRequest) -> GeminiValidationResult:
+    """Evaluates candidate depth, authenticity, and generates tailored interview questions via Gemini."""
+    if not payload.job_text or not payload.job_text.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Job text cannot be empty for AI validation.",
+        )
+    return validate_candidate_with_gemini(
+        job_description=payload.job_text,
+        candidate_name=payload.candidate_name,
+        candidate_text=payload.candidate_text or "",
+        matched_skills=payload.matched_skills,
+        missing_skills=payload.missing_skills,
+    )
 
 
 @app.get("/api/samples", response_model=SamplesResponse)

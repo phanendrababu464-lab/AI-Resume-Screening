@@ -5,6 +5,8 @@ import type {
   ScreenResponse,
   ScoringWeights,
   CandidateRanking,
+  GeminiValidationResponse,
+  ValidateResumeRequest,
 } from '../types/api.ts';
 
 const BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -148,4 +150,26 @@ export async function exportCsv(rankings: CandidateRanking[], jobTitle?: string)
   a.click();
   a.remove();
   window.URL.revokeObjectURL(downloadUrl);
+}
+
+/**
+ * Validates a candidate resume and generates AI fit analysis & interview questions using Google Gemini.
+ */
+export async function validateResumeWithGemini(
+  payload: ValidateResumeRequest
+): Promise<GeminiValidationResponse> {
+  const res = await fetch(`${BASE_URL}/api/resumes/validate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: 'Failed to validate with Gemini' }));
+    throw new Error(errorData.detail || `Server error ${res.status}`);
+  }
+
+  return res.json();
 }

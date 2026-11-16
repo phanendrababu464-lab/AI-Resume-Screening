@@ -38,6 +38,27 @@ export interface CandidateRanking {
   is_duplicate?: boolean;
   duplicate_of?: string | null;
   text_hash?: string;
+  resume_snippet?: string;
+}
+
+export interface GeminiValidationResponse {
+  status: 'success' | 'unconfigured' | 'error';
+  validation_score: number | null;
+  executive_summary: string;
+  strengths: string[];
+  risks_or_concerns: string[];
+  interview_questions: string[];
+  authenticity_assessment: string;
+  model_used?: string | null;
+  error_message?: string | null;
+}
+
+export interface ValidateResumeRequest {
+  job_text: string;
+  candidate_name: string;
+  candidate_text?: string;
+  matched_skills?: string[];
+  missing_skills?: string[];
 }
 
 export interface Recommendation {
