@@ -67,14 +67,11 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 # CORS Configuration: localhost:5173 and 127.0.0.1:5173 by default, or env var
 # ---------------------------------------------------------------------------
-cors_origins_env = os.getenv("CORS_ORIGINS", "")
-if cors_origins_env.strip():
+cors_origins_env = os.getenv("CORS_ORIGINS", "*")
+if cors_origins_env.strip() and cors_origins_env.strip() != "*":
     allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
 else:
-    allowed_origins = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
+    allowed_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -185,6 +182,19 @@ class ScreenResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # API Endpoints
 # ---------------------------------------------------------------------------
+
+@app.get("/")
+def root_health_check() -> dict[str, Any]:
+    """Root endpoint for cloud hosting health checks (Render, Vercel, Railway)."""
+    return {
+        "status": "ok",
+        "service": "ai-resume-screening",
+        "version": "1.0.0",
+        "health": "/api/health",
+        "docs": "/docs",
+        "gemini_available": is_gemini_available(),
+    }
+
 
 @app.get("/api/health", response_model=HealthResponse)
 def get_health() -> HealthResponse:
