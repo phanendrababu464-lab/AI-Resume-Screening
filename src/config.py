@@ -13,6 +13,19 @@ DATA_DIR: Path = BASE_DIR / "data"
 SKILLS_DIR: Path = DATA_DIR / "skills"
 DEFAULT_SKILLS_FILE: Path = SKILLS_DIR / "technical_skills.json"
 
+# Automatically load local .env file if it exists
+_env_path = BASE_DIR / ".env"
+if _env_path.is_file():
+    try:
+        with open(_env_path, encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    os.environ.setdefault(_k.strip(), _v.strip().strip("'\""))
+    except Exception:
+        pass
+
 # Model and inference configurations
 EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
 DEFAULT_DEVICE: str = "cpu"

@@ -78,6 +78,7 @@ class TestRepositoryCleanliness:
     """Validates that repository root contains no stray planning files or artifacts."""
 
     ALLOWED_ROOT_FILES = {
+        ".env",
         ".gitignore",
         ".python-version",
         ".vercelignore",
