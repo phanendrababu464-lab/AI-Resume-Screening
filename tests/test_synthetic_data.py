@@ -85,6 +85,7 @@ class TestRepositoryCleanliness:
         "run_app.sh",
         "run_web.sh",
         "pyproject.toml",
+        "uv.lock",
         "vercel.json",
     }
 
