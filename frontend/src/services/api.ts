@@ -9,13 +9,22 @@ import type {
   ValidateResumeRequest,
 } from '../types/api.ts';
 
-const BASE_URL = import.meta.env.VITE_API_URL || '';
+const RAW_URL = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '').trim();
+const BASE_URL = RAW_URL.replace(/\/+$/, '');
+
+/**
+ * Builds a properly formatted API endpoint URL, preventing duplicate slashes.
+ */
+export function getApiUrl(path: string): string {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return BASE_URL ? `${BASE_URL}${cleanPath}` : cleanPath;
+}
 
 /**
  * Checks backend health status.
  */
 export async function checkHealth(): Promise<HealthResponse> {
-  const res = await fetch(`${BASE_URL}/api/health`);
+  const res = await fetch(getApiUrl('/api/health'));
   if (!res.ok) {
     throw new Error(`Health check failed with status ${res.status}`);
   }
@@ -26,7 +35,7 @@ export async function checkHealth(): Promise<HealthResponse> {
  * Fetches sample job descriptions and sample resumes.
  */
 export async function fetchSamples(): Promise<SamplesResponse> {
-  const res = await fetch(`${BASE_URL}/api/samples`);
+  const res = await fetch(getApiUrl('/api/samples'));
   if (!res.ok) {
     throw new Error(`Failed to fetch samples: ${res.statusText}`);
   }
@@ -37,7 +46,7 @@ export async function fetchSamples(): Promise<SamplesResponse> {
  * Downloads a sample resume from the backend as a browser File object.
  */
 export async function fetchSampleResumeFile(filename: string): Promise<File> {
-  const res = await fetch(`${BASE_URL}/api/samples/resume/${encodeURIComponent(filename)}`);
+  const res = await fetch(getApiUrl(`/api/samples/resume/${encodeURIComponent(filename)}`));
   if (!res.ok) {
     throw new Error(`Failed to load sample resume ${filename}`);
   }
@@ -52,7 +61,7 @@ export async function fetchSampleResumeFile(filename: string): Promise<File> {
  * Sends job text to the backend for real-time skill & experience extraction preview.
  */
 export async function analyzeJob(text: string): Promise<JobAnalyzeResponse> {
-  const res = await fetch(`${BASE_URL}/api/jobs/analyze`, {
+  const res = await fetch(getApiUrl('/api/jobs/analyze'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -98,7 +107,7 @@ export async function screenResumes(
     formData.append('files', file);
   }
 
-  const res = await fetch(`${BASE_URL}/api/screen`, {
+  const res = await fetch(getApiUrl('/api/screen'), {
     method: 'POST',
     body: formData,
   });
@@ -123,7 +132,7 @@ export async function screenResumes(
  * Downloads candidate ranking results as a formatted CSV spreadsheet.
  */
 export async function exportCsv(rankings: CandidateRanking[], jobTitle?: string): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/export`, {
+  const res = await fetch(getApiUrl('/api/export'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -158,7 +167,7 @@ export async function exportCsv(rankings: CandidateRanking[], jobTitle?: string)
 export async function validateResumeWithGemini(
   payload: ValidateResumeRequest
 ): Promise<GeminiValidationResponse> {
-  const res = await fetch(`${BASE_URL}/api/resumes/validate`, {
+  const res = await fetch(getApiUrl('/api/resumes/validate'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

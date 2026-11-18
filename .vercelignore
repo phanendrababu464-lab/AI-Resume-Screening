@@ -1,0 +1,15 @@
+# Ignore Python backend and ML dependencies for Vercel frontend deployments
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+src/
+api/
+tests/
+data/
+.pytest_cache/
+uv.lock
+.python-version
+requirements.txt
+pyproject.toml
+*.sh

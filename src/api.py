@@ -65,17 +65,25 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------------------------
-# CORS Configuration: localhost:5173 and 127.0.0.1:5173 by default, or env var
+# CORS Configuration: Local dev + Vercel deployed frontend domains
 # ---------------------------------------------------------------------------
-cors_origins_env = os.getenv("CORS_ORIGINS", "*")
-if cors_origins_env.strip() and cors_origins_env.strip() != "*":
-    allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+default_allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://ai-resume-screening-three-kohl.vercel.app",
+]
+
+cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()
+if cors_origins_env:
+    env_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip() and o.strip() != "*"]
+    allowed_origins = list(dict.fromkeys(default_allowed_origins + env_origins))
 else:
-    allowed_origins = ["*"]
+    allowed_origins = default_allowed_origins
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"^https://.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

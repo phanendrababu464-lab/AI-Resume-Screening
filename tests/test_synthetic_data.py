@@ -80,6 +80,7 @@ class TestRepositoryCleanliness:
     ALLOWED_ROOT_FILES = {
         ".gitignore",
         ".python-version",
+        ".vercelignore",
         "README.md",
         "requirements.txt",
         "run_app.sh",
