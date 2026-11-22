@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Award,
@@ -34,16 +34,25 @@ export const CandidateDetailDrawer: React.FC<CandidateDetailDrawerProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [copiedQuestions, setCopiedQuestions] = useState<boolean>(false);
 
-  // Reset or initialize state when selected candidate changes
+  const validationRequest = useRef<AbortController | null>(null);
+
+  // Reset the analysis when the selected candidate or job changes.
   useEffect(() => {
     setValidation(null);
     setLoading(false);
     setCopiedQuestions(false);
-  }, [candidate?.candidate]);
+    return () => {
+      validationRequest.current?.abort();
+      validationRequest.current = null;
+    };
+  }, [candidate, jobText]);
 
   if (!candidate) return null;
 
   const handleRunValidation = async () => {
+    validationRequest.current?.abort();
+    const request = new AbortController();
+    validationRequest.current = request;
     setLoading(true);
     try {
       const res = await validateResumeWithGemini({
@@ -52,9 +61,10 @@ export const CandidateDetailDrawer: React.FC<CandidateDetailDrawerProps> = ({
         candidate_text: candidate.resume_snippet || '',
         matched_skills: candidate.matched_skills,
         missing_skills: candidate.missing_skills,
-      });
-      setValidation(res);
+      }, request.signal);
+      if (!request.signal.aborted) setValidation(res);
     } catch (err: unknown) {
+      if (request.signal.aborted) return;
       setValidation({
         status: 'error',
         validation_score: null,
@@ -66,7 +76,10 @@ export const CandidateDetailDrawer: React.FC<CandidateDetailDrawerProps> = ({
         error_message: err instanceof Error ? err.message : String(err),
       });
     } finally {
-      setLoading(false);
+      if (validationRequest.current === request) {
+        validationRequest.current = null;
+        setLoading(false);
+      }
     }
   };
 
@@ -313,9 +326,11 @@ export const CandidateDetailDrawer: React.FC<CandidateDetailDrawerProps> = ({
                       Gemini AI Validation
                     </h4>
                   </div>
-                  <span className="text-[10px] font-semibold font-mono px-2 py-0.5 rounded-full bg-accent-50 dark:bg-accent-950/60 text-accent-700 dark:text-accent-300 border border-accent-200 dark:border-accent-800">
-                    gemini-2.5-flash
-                  </span>
+                  {validation?.model_used && (
+                    <span className="text-[10px] font-semibold font-mono px-2 py-0.5 rounded-full bg-accent-50 dark:bg-accent-950/60 text-accent-700 dark:text-accent-300 border border-accent-200 dark:border-accent-800">
+                      {validation.model_used}
+                    </span>
+                  )}
                 </div>
 
                 {!validation && !loading && (
@@ -349,7 +364,7 @@ export const CandidateDetailDrawer: React.FC<CandidateDetailDrawerProps> = ({
                           AI Validation Ready
                         </p>
                         <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed">
-                          Configure <code className="px-1 py-0.5 bg-amber-100 dark:bg-amber-900/60 rounded text-[11px] font-mono">GEMINI_API_KEY</code> in Vercel or your local environment to activate deep AI resume verification and customized interview guides.
+                          Configure <code className="px-1 py-0.5 bg-amber-100 dark:bg-amber-900/60 rounded text-[11px] font-mono">GEMINI_API_KEY</code> on the Render backend or in your local backend environment to activate deep AI resume verification and customized interview guides.
                         </p>
                       </div>
                     </div>

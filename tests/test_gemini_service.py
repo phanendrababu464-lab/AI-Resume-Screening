@@ -103,6 +103,37 @@ def test_validate_mock_success():
             assert res.authenticity_assessment == "Authentic project track record demonstrated."
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"validation_score": 101},
+        {"validation_score": "88"},
+        {"strengths": "Python"},
+        {"executive_summary": "  "},
+    ],
+)
+def test_validate_mock_rejects_malformed_analysis(payload):
+    complete = {
+        "validation_score": 88,
+        "executive_summary": "Candidate has relevant Python experience.",
+        "strengths": ["Python"],
+        "risks_or_concerns": [],
+        "interview_questions": ["How did you test the API?"],
+        "authenticity_assessment": "Discuss the candidate's individual contribution.",
+    }
+    response = {**complete, **payload} if payload else payload
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value.text = import_json(response)
+
+    with patch.dict(os.environ, {"GEMINI_API_KEY": "mock-key"}, clear=True):
+        with patch("google.genai.Client", return_value=mock_client):
+            result = validate_candidate_with_gemini("Python engineer", "sample.pdf")
+
+    assert result.status == "error"
+    assert result.validation_score is None
+
+
 def test_validate_mock_api_error():
     mock_client = MagicMock()
     mock_client.models.generate_content.side_effect = RuntimeError("Rate limit exceeded 429")
@@ -117,7 +148,7 @@ def test_validate_mock_api_error():
             )
             assert res.status == "error"
             assert res.validation_score is None
-            assert "rate limit" in res.error_message.lower()
+            assert res.error_message == "Gemini could not complete the request. Try again shortly."
 
 
 def test_api_validate_endpoint_unconfigured(client: TestClient):
