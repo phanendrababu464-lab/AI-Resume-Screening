@@ -428,7 +428,7 @@ def rank(
             corpus = [jd_sem_text] + [cand_sem_texts[i] for i in valid_indices]
             mat = None
             try:
-                vec = TfidfVectorizer(stop_words="english")
+                vec = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
                 mat = vec.fit_transform(corpus)
             except ValueError:
                 try:

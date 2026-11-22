@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+from contextlib import asynccontextmanager
 import csv
 import io
 import logging
@@ -96,7 +97,14 @@ _SCREENING_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
     thread_name_prefix="screening_worker",
 )
 
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    await _warm_up_model()
+    yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="AI Resume Screening API",
     description="Backend API powering the Resume Screening web application.",
     version="1.0.0",
@@ -131,7 +139,6 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # Warm up ML model on startup (avoid first-request cold-start penalty)
 # ---------------------------------------------------------------------------
-@app.on_event("startup")
 async def _warm_up_model() -> None:
     """Pre-load SentenceTransformer in the screening thread-pool on startup.
 
@@ -189,6 +196,7 @@ def _run_screening_sync(
     files_to_parse: list[Any],
     job_text: str,
     weights: WeightConfig,
+    anonymize: bool = False,
 ) -> tuple[JobAnalysis, list[Any], list[Any], list[CandidateRanking], Recommendation, dict[str, Any], list[str], dict[str, float], Optional[str]]:
     """Execute the full ML screening pipeline synchronously.
 
@@ -206,15 +214,18 @@ def _run_screening_sync(
 
     # Parse all resumes, collecting per-file errors without aborting batch
     parsed_resumes: list[Any] = []
-    for item in files_to_parse:
+    for index, item in enumerate(files_to_parse, start=1):
         fname = getattr(item, "name", str(item))
-        base_name = Path(fname).name
+        base_name = f"Candidate {index}" if anonymize else Path(fname).name
         try:
             prs = parse_resumes([item])
+            if anonymize:
+                for resume in prs:
+                    resume.filename = base_name
             if prs:
                 parsed_resumes.extend(prs)
         except Exception as exc:
-            safe_msg = clean_error_message(str(exc))
+            safe_msg = "Could not parse resume." if anonymize else clean_error_message(str(exc))
             logger.warning("Resume parse error for %s: %s", base_name, safe_msg)
             file_errors.append({"filename": base_name, "error": safe_msg})
 
@@ -227,6 +238,11 @@ def _run_screening_sync(
     logger.info(
         "Ranked %d candidates in %.2fs", len(rankings), time.time() - t0
     )
+
+    if anonymize:
+        for candidate in rankings:
+            candidate.resume_snippet = ""
+            candidate.text_hash = None
 
     recommendation = build_recommendation(rankings, job_analysis)
 
@@ -591,15 +607,21 @@ async def screen_resumes_endpoint(
     if use_sample_resumes or sample_resume_ids:
         res_dir = DATA_DIR / "resumes"
         if res_dir.exists():
+            samples = sorted(f for f in res_dir.glob("resume_*.*") if f.is_file() and f.suffix.lower() in ALLOWED_FILE_EXTENSIONS)
             if sample_resume_ids:
-                id_list = [i.strip() for i in sample_resume_ids.split(",") if i.strip()]
-                for rid in id_list:
-                    matched = list(res_dir.glob(f"{rid}.*")) or list(res_dir.glob(f"resume_{rid}.*"))
-                    for mf in matched:
-                        files_to_parse.append(str(mf))
+                by_id = {f.stem: f for f in samples}
+                selected = []
+                for sample_id in dict.fromkeys(x.strip() for x in sample_resume_ids.split(",") if x.strip()):
+                    sample = by_id.get(sample_id) or by_id.get(f"resume_{sample_id}")
+                    if sample is None:
+                        raise HTTPException(status_code=400, detail="Unknown sample resume ID.")
+                    selected.append(sample)
             else:
-                for f in sorted(res_dir.glob("resume_*.*")):
-                    files_to_parse.append(str(f))
+                selected = samples
+            files_to_parse.extend(str(sample) for sample in selected)
+
+    if len(files_to_parse) > MAX_FILES_COUNT:
+        raise HTTPException(status_code=400, detail=f"Maximum batch size is {MAX_FILES_COUNT} resumes.")
 
     if not files_to_parse:
         raise HTTPException(
@@ -642,6 +664,7 @@ async def screen_resumes_endpoint(
             files_to_parse,
             job_text,
             weights,
+            anonymize,
         )
     except ValueError as exc:
         # Raised by _run_screening_sync when ALL resumes fail parsing

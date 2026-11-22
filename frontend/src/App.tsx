@@ -373,7 +373,7 @@ export const App: React.FC = () => {
           {/* 5.e Candidate Detail Drawer */}
           <CandidateDetailDrawer
             candidate={selectedCandidate}
-            jobText={jobText}
+            jobText={results?.job.raw_text || ''}
             onClose={() => setSelectedCandidateName(null)}
           />
         </main>

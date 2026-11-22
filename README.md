@@ -1,6 +1,6 @@
 # HireLens AI
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![Architecture](https://img.shields.io/badge/architecture-4--tier%20decoupled-teal.svg)](#architecture-overview)
 [![Pydantic v2](https://img.shields.io/badge/contracts-pydantic%20v2-green.svg)](https://docs.pydantic.dev/)
 [![Hardware](https://img.shields.io/badge/hardware-CPU%20only%20%28no%20GPU%29-orange.svg)](#prerequisites)
@@ -105,7 +105,7 @@ The system is organized into a **4-tier decoupled architecture**, strictly isola
 
 ### The 4-Tier Model
 
-1. **Tier 1: Presentation Layer (`app/` & `src/app.py`)**:
+1. **Tier 1: Presentation Layer (`frontend/` & `src/api.py`)**:
 2. **Tier 2: Service & Contract Layer (`src/services/` & `src/schemas.py`)**:
    - `src/services/screening_service.py`: Headless orchestration boundary. Manages job parsing, file ingestion, anonymization, and scoring pipelines. Employs singleton pattern caching for CPU inference models.
    - `src/schemas.py`: Explicit, validated Pydantic v2 domain schemas defining inputs, intermediate artifacts, and output rankings.
@@ -266,7 +266,6 @@ resume-screening-system/
 │   ├── test_synthetic_data.py   # Synthetic data validation tests
 │   └── test_e2e_screening.py    # 4-Tier end-to-end evaluation suite (124 tests)
 ├── .gitignore
-├── run_web.sh                   # Launch the React frontend and FastAPI backend
 ├── run_web.sh                   # One-click launcher for FastAPI (:8000) + React (:5173)
 ├── requirements.txt             # Locked project dependencies
 └── README.md                    # Comprehensive system documentation
@@ -278,7 +277,7 @@ resume-screening-system/
 
 ### Prerequisites
 
-- **Python**: Version 3.10 or higher (tested on Python 3.10, 3.11, 3.12, 3.13).
+- **Python**: Use Python 3.12.8 to match Render.
 - **Architecture**: Standard x86_64 or Apple Silicon ARM64 terminal.
 - **Hardware**: Standard laptop / workstation CPU (no CUDA/GPU required; memory footprint < 1.5 GB).
 
@@ -527,57 +526,14 @@ To support out-of-the-box evaluation and hermetic automated testing, the reposit
 
 ## Testing & Verification
 
-The system maintains a comprehensive, hermetic automated test suite with **371 backend tests** executed via `pytest` and **15 frontend unit tests** executed via `vitest` (386 total passing tests). All tests execute locally on CPU with zero network calls and zero mock-bypassing.
-
-### Running Backend Tests (`pytest`)
-
-Execute the entire backend test suite:
+Run the backend suite from the repository root and the frontend checks from the frontend directory.
 
 ```bash
-source .venv/bin/activate
-pytest -q
+python -m pytest -q
+(cd frontend && npm test && npm run build)
 ```
 
-Output:
-```text
-371 passed in ~24s
-```
-
-### Running Frontend Tests (`vitest`)
-
-Execute the frontend unit test suite:
-
-```bash
-cd frontend
-npm test
-```
-
-Output:
-```text
-Test Files  1 passed (1)
-     Tests  15 passed (15)
-```
-
-### Test Suite Breakdown
-
-| Module | Test Count | Focus & Acceptance Coverage |
-| :--- | :---: | :--- |
-| `tests/test_parser.py` | 7 | Baseline PDF/DOCX ingestion and text extraction |
-| `tests/test_preprocessor.py` | 5 | Text cleaning, bullet stripping, and hyphen protection (`Scikit-Learn`) |
-| `tests/test_ranker.py` | 4 | Baseline ranking and legacy 7-column DataFrame compatibility |
-| `tests/test_skill_extractor.py` | 10 | Baseline skill taxonomy loading and phrase matching |
-| `tests/test_section_splitting.py` | 12 | Heading regex parsing and heuristic fallback for unstructured resumes |
-| `tests/test_job_parser.py` | 12 | Cue-phrase required vs preferred splitting and min experience extraction |
-| `tests/test_edge_cases.py` | 21 | C#, C++, .NET, Node.js, standalone R guard, Java vs JS, aliases, plurals |
-| `tests/test_anonymizer.py` | 43 | PII redaction (names, emails, phones, pronouns) & evaluation invariance |
-| `tests/test_screening_service.py` | 16 | Headless service layer functions, Pydantic contracts, stream ingestion |
-| `tests/test_ui_decoupling.py` | 5 | UI decoupling & wrong environment path guard verification |
-| `tests/test_experience_gate.py` | 5 | Below-minimum-experience penalty, flag, and score attenuation |
-| `tests/test_related_skills.py` | 7 | Semantic partial credit graph, exact match dominance, weight integrity |
-| `tests/test_synthetic_data.py` | 92 | Validation of 10 synthetic resumes and 3 synthetic job descriptions |
-| `tests/test_e2e_screening.py` | 124 | 4-Tier end-to-end requirement, boundary, and stress evaluation suite |
-| `frontend/src/utils/helpers.test.ts` | 15 | Weight normalization, formatting, file validation, related skills parsing |
-| **Total Automated Tests** | **386** | **100% Passing (371 Pytest + 15 Vitest)** |
+The integration tests exercise PDF and DOCX screening, anonymized results, recommendations and CSV export. Gemini success and failure paths use simulated provider responses.
 
 ### Quality & Integrity Guarantees
 

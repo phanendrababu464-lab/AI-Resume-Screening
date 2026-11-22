@@ -441,3 +441,29 @@ def test_api_screen_weight_redistribution_and_duplicates() -> None:
     assert rankings[1]["rank_display"] == "T-1"
     assert rankings[1]["is_duplicate"] is True
     assert rankings[1]["duplicate_of"] == "cand_a.pdf"
+
+
+def test_anonymous_sample_screen_masks_candidate_in_results_and_export():
+    response = client.post("/api/screen", data={
+        "job_text": "Required: Python and FastAPI",
+        "sample_resume_ids": "resume_01",
+        "anonymize": "true",
+    })
+    assert response.status_code == 200
+    results = response.json()
+    candidate, = results["rankings"]
+    assert candidate["candidate"] == "Candidate 1"
+    assert candidate["resume_snippet"] == ""
+    assert candidate["text_hash"] is None
+    assert "resume_01" not in response.text
+    exported = client.post("/api/export", json={"rankings": results["rankings"]})
+    assert exported.status_code == 200
+    assert "Candidate 1" in exported.text
+
+
+def test_sample_selection_requires_a_known_id():
+    response = client.post("/api/screen", data={
+        "job_text": "Required: Python",
+        "sample_resume_ids": "unknown_sample",
+    })
+    assert response.status_code == 400
