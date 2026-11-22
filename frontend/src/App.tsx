@@ -109,18 +109,20 @@ export const App: React.FC = () => {
 
   // Initial fetch of sample data with graceful retry if backend is waking up
   useEffect(() => {
-    let isMounted = true;
+    const controller = new AbortController();
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     const loadSamples = async (attemptsLeft = 2) => {
       try {
-        const data = await fetchSamples();
-        if (isMounted) {
+        const data = await fetchSamples(controller.signal);
+        if (!controller.signal.aborted) {
           setSampleJobs(data.jobs || []);
           setSampleResumes(data.resumes || []);
         }
       } catch (err) {
-        if (attemptsLeft > 0 && isMounted) {
-          setTimeout(() => {
-            if (isMounted) loadSamples(attemptsLeft - 1);
+        if (controller.signal.aborted) return;
+        if (attemptsLeft > 0) {
+          retryTimer = setTimeout(() => {
+            if (!controller.signal.aborted) loadSamples(attemptsLeft - 1);
           }, 6000);
         } else {
           console.warn('Could not load samples:', err);
@@ -130,7 +132,8 @@ export const App: React.FC = () => {
 
     loadSamples();
     return () => {
-      isMounted = false;
+      controller.abort();
+      clearTimeout(retryTimer);
     };
   }, []);
 

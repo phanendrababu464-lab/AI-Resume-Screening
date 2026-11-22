@@ -34,14 +34,15 @@ async function fetchWithTimeout(
   options: RequestInit = {},
   timeoutMs: number = 30000
 ): Promise<Response> {
+  if (options.signal?.aborted) throw new Error('Request was cancelled');
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort();
   }, timeoutMs);
 
-  if (options.signal) {
-    options.signal.addEventListener('abort', () => controller.abort());
-  }
+  const cancelRequest = () => controller.abort();
+  options.signal?.addEventListener('abort', cancelRequest);
 
   try {
     const res = await fetch(url, {
@@ -68,6 +69,7 @@ async function fetchWithTimeout(
     throw err;
   } finally {
     clearTimeout(timeoutId);
+    options.signal?.removeEventListener('abort', cancelRequest);
   }
 }
 
