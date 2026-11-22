@@ -1,0 +1,45 @@
+{
+  "PostgreSQL": {
+    "MySQL": 0.5,
+    "Oracle": 0.5,
+    "Oracle Database": 0.5,
+    "SQL Server": 0.5,
+    "Microsoft SQL Server": 0.5,
+    "SQLite": 0.5
+  },
+  "FastAPI": {
+    "Flask": 0.6,
+    "Django": 0.5,
+    "Express.js": 0.4
+  },
+  "React": {
+    "Vue.js": 0.6,
+    "AngularJS": 0.5
+  },
+  "Vue.js": {
+    "React": 0.6,
+    "AngularJS": 0.5
+  },
+  "Docker": {
+    "Kubernetes": 0.6
+  },
+  "Kubernetes": {
+    "Docker": 0.6
+  },
+  "AWS": {
+    "Azure": 0.7,
+    "GCP": 0.7,
+    "Google Cloud Platform": 0.7
+  },
+  "Azure": {
+    "AWS": 0.7,
+    "GCP": 0.7,
+    "Google Cloud Platform": 0.7
+  },
+  "TypeScript": {
+    "JavaScript": 0.7
+  },
+  "JavaScript": {
+    "TypeScript": 0.7
+  }
+}

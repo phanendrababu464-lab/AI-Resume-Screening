@@ -1,0 +1,12 @@
+Job Title: Senior Backend Python Engineer
+Experience: Minimum 5 years of professional experience in backend software engineering.
+
+Requirements:
+- Must have hands-on experience in Python and FastAPI.
+- Required proficiency in PostgreSQL and Docker.
+- Must possess solid understanding of microservices architecture, REST API, and Git.
+
+Preferred Qualifications:
+- Experience with AWS and Kubernetes is a plus.
+- Knowledge of Redis caching is desired.
+- Hands-on experience with CI/CD pipelines and automated testing with PyTest is advantageous.
