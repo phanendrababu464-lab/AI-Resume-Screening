@@ -11,6 +11,8 @@
 /.python-version
 /requirements.txt
 /pyproject.toml
+/Procfile
+/render.yaml
 *.sh
 
 # Never ignore any frontend files

@@ -107,16 +107,31 @@ export const App: React.FC = () => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Initial fetch of sample data
+  // Initial fetch of sample data with graceful retry if backend is waking up
   useEffect(() => {
-    fetchSamples()
-      .then((data) => {
-        setSampleJobs(data.jobs || []);
-        setSampleResumes(data.resumes || []);
-      })
-      .catch((err) => {
-        console.warn('Could not load samples on initial mount:', err);
-      });
+    let isMounted = true;
+    const loadSamples = async (attemptsLeft = 2) => {
+      try {
+        const data = await fetchSamples();
+        if (isMounted) {
+          setSampleJobs(data.jobs || []);
+          setSampleResumes(data.resumes || []);
+        }
+      } catch (err) {
+        if (attemptsLeft > 0 && isMounted) {
+          setTimeout(() => {
+            if (isMounted) loadSamples(attemptsLeft - 1);
+          }, 6000);
+        } else {
+          console.warn('Could not load samples:', err);
+        }
+      }
+    };
+
+    loadSamples();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Validation logic for Run button

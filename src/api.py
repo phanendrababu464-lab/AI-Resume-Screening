@@ -7,15 +7,36 @@ Exposes REST endpoints for:
 - Real-time job analysis (/api/jobs/analyze)
 - Resume screening & ranking (/api/screen)
 - Results export to CSV (/api/export)
+
+## Production architecture notes (Render free tier)
+
+The /api/screen endpoint performs CPU-bound ML inference (SentenceTransformer.encode)
+that can take 5-8 seconds on first call (cold model load) and <0.3s on subsequent warm
+calls. On Render's free tier, one uvicorn worker handles all requests.
+
+ROOT CAUSE OF 502/503/429:
+- `async def screen_resumes_endpoint` calls `rank()` synchronously inside the event loop.
+- `rank()` calls `SentenceTransformer.encode()` which is a pure CPU blocking operation.
+- While encode() runs, the event loop is fully blocked → no other request (including
+  /api/health) can be processed → Render's upstream proxy eventually times out → 502.
+- Subsequent health checks pile up → 429 (rate limit hit on the proxy level) or 503.
+
+FIX: Run the CPU-bound screening work in a thread-pool executor via
+asyncio.get_event_loop().run_in_executor() so the event loop stays free to serve
+health checks and other lightweight requests while screening is in progress.
 """
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import csv
 import io
+import logging
 import os
 from pathlib import Path
 import re
+import time
 from typing import Any, Optional
 import urllib.parse
 
@@ -48,8 +69,15 @@ from src.services.screening_service import (
     get_overall_ranking_chart_data,
     get_score_composition_chart_data,
     get_skill_matrix_chart_data,
+    get_sentence_model,
     parse_resumes,
     rank,
+)
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -57,6 +85,16 @@ DATA_DIR = REPO_ROOT / "data"
 
 MAX_FILES_COUNT = MAX_RESUMES_PER_BATCH
 ALLOWED_FILE_EXTENSIONS = {".pdf", ".docx"}
+
+# ---------------------------------------------------------------------------
+# Thread-pool for CPU-bound ML inference
+# A single-thread pool prevents memory spikes from simultaneous model calls
+# on a constrained host (Render free tier has 512 MB RAM shared).
+# ---------------------------------------------------------------------------
+_SCREENING_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="screening_worker",
+)
 
 app = FastAPI(
     title="AI Resume Screening API",
@@ -91,6 +129,31 @@ app.add_middleware(
 
 
 # ---------------------------------------------------------------------------
+# Warm up ML model on startup (avoid first-request cold-start penalty)
+# ---------------------------------------------------------------------------
+@app.on_event("startup")
+async def _warm_up_model() -> None:
+    """Pre-load SentenceTransformer in the screening thread-pool on startup.
+
+    Prevents the first real /api/screen request from blocking 5-8 seconds
+    while the model is loaded from disk.
+    """
+    loop = asyncio.get_event_loop()
+
+    def _load() -> None:
+        t0 = time.time()
+        try:
+            model = get_sentence_model()
+            # Run one encode to populate torch JIT caches
+            model.encode(["warmup"], show_progress_bar=False, convert_to_numpy=True)
+            logger.info("SentenceTransformer warm-up complete in %.2fs", time.time() - t0)
+        except Exception as exc:  # pragma: no cover
+            logger.warning("SentenceTransformer warm-up failed (non-fatal): %s", exc)
+
+    await loop.run_in_executor(_SCREENING_EXECUTOR, _load)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -104,7 +167,7 @@ def clean_error_message(err_msg: str) -> str:
     # Redact absolute Unix file paths (/Users/..., /home/..., /var/...)
     cleaned = re.sub(r'(/[a-zA-Z0-9_\-\.]+)+/[a-zA-Z0-9_\-\.]+', '<path>', cleaned)
     # Redact absolute Windows file paths (C:\...)
-    cleaned = re.sub(r'[A-Za-z]:\\[a-zA-Z0-9_\-\.\\]+', '<path>', cleaned)
+    cleaned = re.sub(r'[A-Za-z]:\\[a-zA-Z0-9_\-\\.]+', '<path>', cleaned)
     return cleaned
 
 
@@ -116,6 +179,81 @@ def sanitize_csv_cell(value: Any) -> Any:
     if val_str and val_str[0] in ("=", "+", "-", "@"):
         return f"'{val_str}"
     return val_str
+
+
+# ---------------------------------------------------------------------------
+# CPU-bound screening worker (runs in thread-pool, not event loop)
+# ---------------------------------------------------------------------------
+
+def _run_screening_sync(
+    files_to_parse: list[Any],
+    job_text: str,
+    weights: WeightConfig,
+) -> tuple[JobAnalysis, list[Any], list[Any], list[CandidateRanking], Recommendation, dict[str, Any], list[str], dict[str, float], Optional[str]]:
+    """Execute the full ML screening pipeline synchronously.
+
+    Intended to be called via run_in_executor() so the FastAPI event loop
+    is never blocked during CPU-heavy SentenceTransformer inference.
+
+    Returns:
+        (job_analysis, parsed_resumes, file_errors, rankings, recommendation,
+         charts, non_app_comp, eff_w, note)
+    """
+    file_errors: list[Any] = []
+
+    job_analysis = analyze_job(job_text)
+    app_comp, non_app_comp, eff_w, note = get_applicable_components(job_analysis, weights)
+
+    # Parse all resumes, collecting per-file errors without aborting batch
+    parsed_resumes: list[Any] = []
+    for item in files_to_parse:
+        fname = getattr(item, "name", str(item))
+        base_name = Path(fname).name
+        try:
+            prs = parse_resumes([item])
+            if prs:
+                parsed_resumes.extend(prs)
+        except Exception as exc:
+            safe_msg = clean_error_message(str(exc))
+            logger.warning("Resume parse error for %s: %s", base_name, safe_msg)
+            file_errors.append({"filename": base_name, "error": safe_msg})
+
+    if not parsed_resumes:
+        raise ValueError("All provided resumes failed text extraction.")
+
+    # Rank candidates (this calls SentenceTransformer.encode internally)
+    t0 = time.time()
+    rankings = rank(job=job_analysis, resumes=parsed_resumes, weights=weights)
+    logger.info(
+        "Ranked %d candidates in %.2fs", len(rankings), time.time() - t0
+    )
+
+    recommendation = build_recommendation(rankings, job_analysis)
+
+    # Chart datasets
+    overall_chart = get_overall_ranking_chart_data(rankings)
+    composition_chart = get_score_composition_chart_data(rankings, weights)
+    matrix_chart = get_skill_matrix_chart_data(rankings, job_analysis)
+    breakdowns = {r.candidate: get_candidate_breakdown_chart_data(r) for r in rankings}
+
+    charts: dict[str, Any] = {
+        "overall": overall_chart,
+        "composition": composition_chart,
+        "matrix": matrix_chart,
+        "breakdowns": breakdowns,
+    }
+
+    return (
+        job_analysis,
+        parsed_resumes,
+        file_errors,
+        rankings,
+        recommendation,
+        charts,
+        non_app_comp,
+        eff_w,
+        note,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +344,11 @@ def root_health_check() -> dict[str, Any]:
 
 @app.get("/api/health", response_model=HealthResponse)
 def get_health() -> HealthResponse:
-    """Returns backend API operational health status."""
+    """Returns backend API operational health status.
+
+    This endpoint is intentionally lightweight: no ML inference, no I/O.
+    It must remain fast even while /api/screen is running in a thread-pool.
+    """
     return HealthResponse(
         status="ok",
         version="1.0.0",
@@ -378,7 +520,18 @@ async def screen_resumes_endpoint(
     renormalize_weights: bool = Form(default=True),
     anonymize: bool = Form(default=False),
 ) -> ScreenResponse:
-    """Main screening pipeline with file type/size/count limits, error sanitization, and score ranking."""
+    """Main screening pipeline with file type/size/count limits, error sanitization, and score ranking.
+
+    ## Event-loop safety
+
+    All CPU-bound work (PDF/DOCX parsing, SentenceTransformer.encode, TF-IDF,
+    scoring) is offloaded to a dedicated ThreadPoolExecutor so the asyncio event
+    loop remains free to serve /api/health and other lightweight requests while
+    screening is in progress. This is what prevents 502/503 on Render's single-
+    worker deployment.
+    """
+    t_start = time.time()
+
     # 1. Validate Job Text
     if not job_text or not job_text.strip():
         raise HTTPException(
@@ -386,7 +539,7 @@ async def screen_resumes_endpoint(
             detail="Job description text is required.",
         )
 
-    # 2. Validate File Count Limit (max 100)
+    # 2. Validate File Count Limit
     if len(files) > MAX_FILES_COUNT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -401,9 +554,8 @@ async def screen_resumes_endpoint(
             detail=f"Scoring weights must sum to 1.00 (currently {total_weights:.2f}).",
         )
 
-    # 4. Validate File Types, Sizes, and Total Batch Size
+    # 4. Read & validate uploads in the event loop (async I/O, non-blocking)
     files_to_parse: list[Any] = []
-    file_errors: list[FileErrorItem] = []
     total_batch_bytes = 0
 
     for uf in files:
@@ -464,48 +616,60 @@ async def screen_resumes_endpoint(
         renormalize_weights=renormalize_weights,
     )
 
-    job_analysis = analyze_job(job_text)
-    app_comp, non_app_comp, eff_w, note = get_applicable_components(job_analysis, weights)
+    logger.info(
+        "Starting screening: %d file(s), %.1f KB total",
+        len(files_to_parse),
+        total_batch_bytes / 1024,
+    )
 
-    # 6. Parse Resumes safely catching corrupted files without failing good ones
-    parsed_resumes: list[Any] = []
-    for item in files_to_parse:
-        fname = getattr(item, "name", str(item))
-        base_name = Path(fname).name
-        try:
-            prs = parse_resumes([item])
-            if prs:
-                parsed_resumes.extend(prs)
-        except Exception as e:
-            # Clean server paths from error message
-            file_errors.append(FileErrorItem(filename=base_name, error=clean_error_message(str(e))))
-
-    if not parsed_resumes:
+    # 6. Offload ALL CPU-bound screening work to the dedicated thread-pool
+    #    so the event loop remains free to serve /api/health during this time.
+    loop = asyncio.get_event_loop()
+    try:
+        (
+            job_analysis,
+            parsed_resumes,
+            raw_file_errors,
+            rankings,
+            recommendation,
+            charts,
+            non_app_comp,
+            eff_w,
+            note,
+        ) = await loop.run_in_executor(
+            _SCREENING_EXECUTOR,
+            _run_screening_sync,
+            files_to_parse,
+            job_text,
+            weights,
+        )
+    except ValueError as exc:
+        # Raised by _run_screening_sync when ALL resumes fail parsing
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="All provided resumes failed text extraction.",
+            detail=str(exc),
+        )
+    except Exception as exc:
+        logger.error("Unexpected screening error: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during resume screening. Please try again.",
         )
 
-    # 7. Rank and Compute Recommendation
-    rankings = rank(job=job_analysis, resumes=parsed_resumes, weights=weights)
-    recommendation = build_recommendation(rankings, job_analysis)
+    file_errors = [FileErrorItem(**e) for e in raw_file_errors]
 
-    # 8. Compute Decoupled Chart Datasets
-    overall_chart = get_overall_ranking_chart_data(rankings)
-    composition_chart = get_score_composition_chart_data(rankings, weights)
-    matrix_chart = get_skill_matrix_chart_data(rankings, job_analysis)
-    breakdowns = {r.candidate: get_candidate_breakdown_chart_data(r) for r in rankings}
+    logger.info(
+        "Screening complete: %d ranked, %d errors, total %.2fs",
+        len(rankings),
+        len(file_errors),
+        time.time() - t_start,
+    )
 
     return ScreenResponse(
         job=job_analysis,
         rankings=rankings,
         recommendation=recommendation,
-        charts={
-            "overall": overall_chart,
-            "composition": composition_chart,
-            "matrix": matrix_chart,
-            "breakdowns": breakdowns,
-        },
+        charts=charts,
         total_candidates=len(rankings),
         file_errors=file_errors,
         effective_weights=eff_w,

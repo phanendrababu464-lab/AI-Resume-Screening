@@ -86,9 +86,12 @@ class TestRepositoryCleanliness:
         "requirements.txt",
         "run_app.sh",
         "run_web.sh",
+        "run_backend.sh",
         "pyproject.toml",
         "uv.lock",
         "vercel.json",
+        "Procfile",
+        "render.yaml",
     }
 
     ALLOWED_ROOT_DIRS = {

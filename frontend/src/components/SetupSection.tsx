@@ -40,26 +40,33 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
   const [isLoadingSamples, setIsLoadingSamples] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Debounced live preview call to /api/jobs/analyze (350ms)
+  // Debounced live preview call to /api/jobs/analyze (350ms) with cancellation
   useEffect(() => {
     if (!jobText.trim()) {
       setJobAnalysis(null);
       return;
     }
 
+    const controller = new AbortController();
     setIsAnalyzingJob(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await analyzeJob(jobText);
+        const res = await analyzeJob(jobText, controller.signal);
         setJobAnalysis(res);
-      } catch {
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return;
+        }
         // quiet error on preview debounce
       } finally {
         setIsAnalyzingJob(false);
       }
     }, 350);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [jobText]);
 
   // Handle sample job selection

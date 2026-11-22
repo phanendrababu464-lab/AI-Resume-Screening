@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Sparkles,
   Sun,
@@ -19,20 +19,25 @@ interface TopBarProps {
 export const TopBar: React.FC<TopBarProps> = ({ onOpenExplainer }) => {
   const { theme, toggleTheme, preset, setPreset } = useTheme();
   const [isApiHealthy, setIsApiHealthy] = useState<boolean | null>(null);
+  const isCheckingRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
     const verifyApi = async () => {
+      if (isCheckingRef.current) return;
+      isCheckingRef.current = true;
       try {
         await checkHealth();
         if (isMounted) setIsApiHealthy(true);
       } catch {
         if (isMounted) setIsApiHealthy(false);
+      } finally {
+        isCheckingRef.current = false;
       }
     };
 
     verifyApi();
-    const interval = setInterval(verifyApi, 15000);
+    const interval = setInterval(verifyApi, 25000);
     return () => {
       isMounted = false;
       clearInterval(interval);
