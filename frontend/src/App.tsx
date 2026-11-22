@@ -21,9 +21,6 @@ import {
   Leaderboard,
 } from './components/Results/Leaderboard.tsx';
 import {
-  ScoreComposition,
-} from './components/Results/ScoreComposition.tsx';
-import {
   SkillMatchMatrix,
 } from './components/Results/SkillMatchMatrix.tsx';
 import {
@@ -57,6 +54,11 @@ import {
   Layers,
   Target,
 } from 'lucide-react';
+
+const ScoreComposition = React.lazy(async () => {
+  const { ScoreComposition } = await import('./components/Results/ScoreComposition.tsx');
+  return { default: ScoreComposition };
+});
 
 interface ToastMessage {
   id: string;
@@ -348,11 +350,13 @@ export const App: React.FC = () => {
               </div>
 
               {/* 5.c Score Composition (Stacked Horizontal Bars) */}
-              <ScoreComposition
-                compositionData={results.charts.composition}
-                rankings={results.rankings}
-                nonApplicableComponents={results.non_applicable_components || []}
-              />
+              <React.Suspense fallback={<p role="status">Loading score breakdown…</p>}>
+                <ScoreComposition
+                  compositionData={results.charts.composition}
+                  rankings={results.rankings}
+                  nonApplicableComponents={results.non_applicable_components || []}
+                />
+              </React.Suspense>
 
               {/* 5.d Skill Match Matrix (Grouped Columns, Symbols, Fixed Sizes) */}
               <div id="results-matrix">
