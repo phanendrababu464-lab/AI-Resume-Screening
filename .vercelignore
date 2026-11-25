@@ -1,20 +1,21 @@
-# Ignore root Python backend and development files for Vercel frontend deployments
 /.venv/
-/__pycache__/
-*.py[cod]
-*$py.class
 /src/
 /tests/
 /data/
+/docs/
+/.github/
 /.pytest_cache/
+/.env*
 /uv.lock
 /.python-version
 /requirements.txt
 /pyproject.toml
 /Procfile
 /render.yaml
-*.sh
-
-# Never ignore any frontend files
-!frontend/
-!frontend/**
+/*.sh
+/frontend/node_modules/
+/frontend/dist/
+/frontend/e2e/
+/frontend/test-results/
+/frontend/playwright-report/
+/frontend/.env*

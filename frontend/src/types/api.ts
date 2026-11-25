@@ -19,11 +19,18 @@ export interface ComponentScores {
   preferred_skill_score: number | null;
   semantic_score: number;
   experience_score: number | null;
+  skill_score?: number | null;
   tfidf_baseline_score?: number | null;
 }
 
 export interface CandidateRanking {
   rank: number;
+  candidate_id?: string;
+  resume_filename?: string | null;
+  candidate_name?: string | null;
+  detected_skills?: string[];
+  experience_years?: number | null;
+  shortlisted?: boolean;
   rank_display?: string;
   candidate: string;
   match_score: number;
@@ -171,4 +178,60 @@ export interface ScoringWeights {
   experience_weight: number;
   experience_penalty: number;
   anonymize: boolean;
+}
+
+export interface HybridWeights {
+  semantic_weight: number;
+  keyword_weight: number;
+  skill_weight: number;
+  experience_weight: number;
+  anonymize: boolean;
+}
+
+export interface JobOverrides {
+  job_title: string;
+  required_skills: string;
+  preferred_skills: string;
+  min_experience_years: string;
+}
+
+export interface InsightsResponse {
+  status: 'success' | 'unconfigured' | 'quota' | 'timeout' | 'error';
+  model?: string;
+  message?: string;
+  analysis?: {
+    summary: string;
+    strengths: string[];
+    experience_observations: string[];
+    missing_qualifications: string[];
+    areas_to_verify: string[];
+    interview_questions: string[];
+    supporting_quotes: string[];
+  };
+}
+
+export interface ServiceConfig {
+  max_resumes_per_batch: number;
+  max_file_size_bytes: number;
+  max_batch_size_bytes: number;
+  gemini_available: boolean;
+}
+
+export interface ModelInfo {
+  embedding: string;
+  skills: string;
+  keyword: string;
+  gemini: string;
+}
+
+export interface ComparisonResult {
+  candidates: Array<{
+    id: string;
+    label: string;
+    overall: number;
+    scores: ComponentScores;
+    matched: string[];
+    missing: string[];
+    experience_years: number | null;
+  }>;
 }

@@ -27,8 +27,8 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
   const { chartPalette } = useTheme();
 
   // Custom label renderer showing percentage on stacked bars when width >= 28px
-  const renderBarLabel = (props: any): React.ReactElement<SVGElement> => {
-    const { x, y, width, height, value } = props;
+  const renderBarLabel = (props: { x?: number; y?: number; width?: number; height?: number; value?: number }): React.ReactElement<SVGElement> => {
+    const { x = 0, y = 0, width, height = 0, value } = props;
     if (!value || typeof width !== 'number' || width < 28) {
       return <g />;
     }

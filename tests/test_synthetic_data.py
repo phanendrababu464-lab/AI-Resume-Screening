@@ -79,6 +79,8 @@ class TestRepositoryCleanliness:
 
     ALLOWED_ROOT_FILES = {
         ".env",
+        ".env.example",
+        "SECURITY.md",
         ".gitignore",
         ".python-version",
         ".vercelignore",
@@ -94,6 +96,7 @@ class TestRepositoryCleanliness:
     }
 
     ALLOWED_ROOT_DIRS = {
+        ".github",
         "api",
         "data",
         "frontend",

@@ -1,5 +1,5 @@
 import type {
-  HealthResponse,
+  HealthResponse, HybridWeights, JobOverrides, InsightsResponse, ServiceConfig, ModelInfo, ComparisonResult,
   SamplesResponse,
   JobAnalyzeResponse,
   ScreenResponse,
@@ -14,7 +14,7 @@ const RAW_URL = (
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_BACKEND_URL ||
   import.meta.env.VITE_BASE_URL ||
-  ''
+  (import.meta.env.PROD ? 'https://ai-resume-screening-3-1r1d.onrender.com' : '')
 ).trim();
 const BASE_URL = RAW_URL.replace(/\/+$/, '');
 
@@ -142,21 +142,21 @@ export async function analyzeJob(text: string, signal?: AbortSignal): Promise<Jo
 export async function screenResumes(
   jobText: string,
   files: File[],
-  weights: ScoringWeights,
+  weights: ScoringWeights | HybridWeights,
   options?: {
     useSampleResumes?: boolean;
     sampleResumeIds?: string[];
+    overrides?: JobOverrides;
   },
   signal?: AbortSignal
 ): Promise<ScreenResponse> {
   const formData = new FormData();
   formData.append('job_text', jobText);
-  formData.append('required_skill_weight', weights.required_skill_weight.toString());
-  formData.append('preferred_skill_weight', weights.preferred_skill_weight.toString());
-  formData.append('semantic_weight', weights.semantic_weight.toString());
-  formData.append('experience_weight', weights.experience_weight.toString());
-  formData.append('experience_penalty', weights.experience_penalty.toString());
-  formData.append('anonymize', weights.anonymize.toString());
+  for (const [name, value] of Object.entries(weights)) formData.append(name, String(value));
+  for (const [name, value] of Object.entries(options?.overrides ?? {})) {
+    if (value.trim()) formData.append(name, value.trim());
+  }
+
 
   if (options?.useSampleResumes) {
     formData.append('use_sample_resumes', 'true');
@@ -184,7 +184,7 @@ export async function screenResumes(
     let errorDetail = `Screening failed: ${res.statusText}`;
     try {
       const errJson = await res.json();
-      if (errJson.detail) {
+      if (typeof errJson.detail === "string") {
         errorDetail = errJson.detail;
       }
     } catch {
@@ -264,4 +264,44 @@ export async function validateResumeWithGemini(
   }
 
   return res.json();
+}
+
+
+async function requestJson<T>(path: string, options: RequestInit = {}, timeout = 8000): Promise<T> {
+  const response = await fetchWithTimeout(getApiUrl(path), options, timeout);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(typeof error.detail === 'string' ? error.detail : `Request failed (${response.status}).`);
+  }
+  return response.json() as Promise<T>;
+}
+
+export async function serviceStatus(signal?: AbortSignal) {
+  const response = await fetchWithTimeout(getApiUrl('/api/ready'), { signal }, 8000);
+  if (response.status !== 200 && response.status !== 503) throw new Error('Backend unavailable');
+  const data = await response.json() as { status: 'ready' | 'initializing' | 'failed' };
+  return data.status;
+}
+
+export const readConfig = (signal?: AbortSignal) => requestJson<ServiceConfig>('/api/config', { signal });
+export const readModelInfo = (signal?: AbortSignal) => requestJson<ModelInfo>('/api/model-info', { signal });
+
+export function readJobDocument(file: File, signal?: AbortSignal) {
+  const body = new FormData();
+  body.append('file', file);
+  return requestJson<{ text: string }>('/api/jobs/document', { method: 'POST', body, signal }, 25000);
+}
+
+export function getInsights(payload: ValidateResumeRequest, signal?: AbortSignal) {
+  return requestJson<InsightsResponse>('/api/insights', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal,
+  }, 27000);
+}
+
+export function compareCandidates(candidates: CandidateRanking[], signal?: AbortSignal) {
+  return requestJson<ComparisonResult>('/api/compare', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ candidates: candidates.map(candidate => ({ ...candidate, resume_snippet: undefined, text_hash: undefined })) }),
+    signal,
+  });
 }
