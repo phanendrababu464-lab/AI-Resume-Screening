@@ -233,3 +233,34 @@ def test_protected_terms_cannot_be_explicit_skill_criteria(sample_docx_stream):
     })
     assert result.status_code == 422
     assert "technical skills" in result.json()["detail"]
+
+
+def test_render_insights_use_lightweight_transport(monkeypatch):
+    monkeypatch.setenv("RENDER_SERVICE_ID", "test")
+    monkeypatch.setenv("GEMINI_API_KEY", "synthetic-test-key")
+    from src.services import insights
+
+    def reject_sdk(*args):
+        pytest.fail("Render must not import the Gemini SDK")
+
+    monkeypatch.setattr(insights, "_interactions_sdk", reject_sdk)
+    excerpt = "Built and maintained FastAPI endpoints."
+    output = dict(summary="Relevant API work", strengths=["FastAPI"], experience_observations=[],
+                  missing_qualifications=[], areas_to_verify=[], interview_questions=["How did you test it?"],
+                  supporting_quotes=[excerpt, "An invented quote must not pass."])
+
+    def provider(request):
+        body = json.loads(request.content)
+        assert request.headers["api-revision"] == "2026-05-20"
+        assert body["store"] is False
+        return httpx.Response(200, json={"steps": [
+            {"type": "model_output", "content": [{"type": "text", "text": json.dumps(output)}]},
+        ]})
+
+    real_client = httpx.Client
+    monkeypatch.setattr(insights.httpx, "Client", lambda **kwargs: real_client(
+        transport=httpx.MockTransport(provider), **kwargs,
+    ))
+    response = generate_insights("Build APIs", excerpt, ["FastAPI"], [])
+    assert response.status == "success"
+    assert response.analysis.supporting_quotes == [excerpt]

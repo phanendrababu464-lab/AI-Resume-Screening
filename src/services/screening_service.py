@@ -458,7 +458,8 @@ def rank(
         if valid_indices:
             valid_texts = [cand_sem_texts[i][:24000] for i in valid_indices]
             all_embs = model.encode(
-                [jd_sem_text] + valid_texts, batch_size=4, convert_to_numpy=True, show_progress_bar=False,
+                [jd_sem_text] + valid_texts, batch_size=1 if os.getenv("RENDER_SERVICE_ID") else 4,
+                convert_to_numpy=True, show_progress_bar=False,
             )
             all_embs = np.asarray(all_embs, dtype=np.float32)
             jd_emb = np.atleast_2d(all_embs[0])
