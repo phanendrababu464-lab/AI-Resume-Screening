@@ -19,6 +19,6 @@ The FastAPI service serves its request schemas at `/openapi.json` and interactiv
 
 For screening, send `job_text`, repeated `files`, and optional `job_title`, comma-separated `required_skills` and `preferred_skills`, `min_experience_years`, and `anonymize`. Fractional `semantic_weight`, `keyword_weight`, `skill_weight`, and `experience_weight` must total 1.0. `use_sample_resumes=true` selects the synthetic fixtures. File-level errors are returned with successful results if at least one file is readable.
 
-For insights, send `job_text`, `candidate_name` as an opaque reference, optional `candidate_text`, `matched_skills`, and `missing_skills`. The response returns `success`, `unconfigured`, `quota`, `timeout` or `error`. Quoted evidence is checked against the submitted excerpt.
+For insights, send `job_text`, `candidate_name` as an opaque reference, optional `candidate_text`, `matched_skills`, and `missing_skills`. The response returns `success`, `unconfigured`, `model_unavailable`, `quota`, `timeout` or `error`. Quoted evidence is checked against the submitted excerpt.
 
 Invalid input receives 400 or 422, oversized requests receive 413, provider admission limits receive 429, and temporarily unavailable inference receives 503 with `Retry-After`. A local processing deadline returns 504. Retry screening only after a human initiates a new request. The service keeps no saved candidate IDs or sessions.

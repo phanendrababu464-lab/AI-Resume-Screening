@@ -15,5 +15,7 @@ services:
         value: "25"
       - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
       - key: CORS_ORIGINS
         value: https://ai-resume-screening-three-kohl.vercel.app

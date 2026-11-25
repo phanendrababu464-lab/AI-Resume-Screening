@@ -196,7 +196,7 @@ export interface JobOverrides {
 }
 
 export interface InsightsResponse {
-  status: 'success' | 'unconfigured' | 'quota' | 'timeout' | 'error';
+  status: 'success' | 'unconfigured' | 'model_unavailable' | 'quota' | 'timeout' | 'error';
   model?: string;
   message?: string;
   analysis?: {

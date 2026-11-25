@@ -27,7 +27,10 @@ def ensure_embedding_snapshot() -> str:
     from huggingface_hub.errors import LocalEntryNotFoundError
 
     try:
-        cached = Path(snapshot_download(EMBEDDING_MODEL_NAME, revision=EMBEDDING_REVISION, local_files_only=True))
+        cached = Path(snapshot_download(
+            EMBEDDING_MODEL_NAME, revision=EMBEDDING_REVISION,
+            local_files_only=True, allow_patterns=ARTIFACTS,
+        ))
         if all((cached / name).is_file() for name in ARTIFACTS):
             return str(cached)
     except LocalEntryNotFoundError:

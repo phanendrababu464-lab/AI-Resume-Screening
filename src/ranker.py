@@ -18,7 +18,8 @@ from src.config import (
     DEFAULT_SKILL_WEIGHT,
     EMBEDDING_MODEL_NAME,
 )
-from src.skill_extractor import TechnicalSkillExtractor
+from src.job_parser import get_skill_extractor
+from src.services.screening_service import get_sentence_model
 
 
 class ResumeRanker:
@@ -42,8 +43,11 @@ class ResumeRanker:
         self.device = device
         self.semantic_weight = semantic_weight
         self.skill_weight = skill_weight
-        self.model = SentenceTransformer(model_name, device=self.device)
-        self.skill_extractor = TechnicalSkillExtractor()
+        if device == DEFAULT_DEVICE and model_name in {EMBEDDING_MODEL_NAME, "all-MiniLM-L6-v2"}:
+            self.model = get_sentence_model()
+        else:
+            self.model = SentenceTransformer(model_name, device=self.device)
+        self.skill_extractor = get_skill_extractor()
 
     def compute_semantic_similarity(self, text_a: str, text_b: str) -> float:
         """Computes cosine similarity between two text snippets.

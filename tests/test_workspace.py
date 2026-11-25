@@ -186,16 +186,17 @@ def test_empty_resume_is_rejected_and_multipart_file_is_closed(monkeypatch):
     assert opened and all(file.closed for file in opened)
 
 
-def test_insights_accounts_for_provider_quota(monkeypatch):
+@pytest.mark.parametrize(("code", "status"), [(429, "quota"), (404, "model_unavailable")])
+def test_insights_reports_provider_availability(monkeypatch, code, status):
     from google.genai.errors import ClientError
 
     monkeypatch.setenv("GEMINI_API_KEY", "synthetic-test-key")
     mock = MagicMock()
     mock.__enter__.return_value.models.generate_content.side_effect = ClientError(
-        429, {"error": {"code": 429, "message": "quota"}}
+        code, {"error": {"code": code, "message": "provider error"}}
     )
     monkeypatch.setattr("google.genai.Client", lambda **kwargs: mock)
-    assert generate_insights("Role", "Resume", [], []).status == "quota"
+    assert generate_insights("Role", "Resume", [], []).status == status
 
 
 

@@ -11,7 +11,7 @@ from src.ranker import ResumeRanker
 @pytest.fixture
 def mock_ranker() -> ResumeRanker:
     """Creates a ResumeRanker with a mocked SentenceTransformer model."""
-    with patch("src.ranker.SentenceTransformer") as mock_st_cls:
+    with patch("src.ranker.get_sentence_model") as load_cached_model:
         mock_model = MagicMock()
 
         def fake_encode(sentences, convert_to_numpy=True, show_progress_bar=False):
@@ -34,7 +34,7 @@ def mock_ranker() -> ResumeRanker:
             return arr[0] if is_single else arr
 
         mock_model.encode.side_effect = fake_encode
-        mock_st_cls.return_value = mock_model
+        load_cached_model.return_value = mock_model
 
         ranker = ResumeRanker()
         return ranker

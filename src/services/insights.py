@@ -67,7 +67,6 @@ def generate_insights(job: str, excerpt: str, matched: list[str], missing: list[
                     response_mime_type="application/json",
                     response_json_schema=InsightsAnalysis.model_json_schema(),
                     max_output_tokens=2600,
-                    temperature=0.2,
                 ),
             )
         result = InsightsAnalysis.model_validate_json(response.text or "")
@@ -78,6 +77,11 @@ def generate_insights(job: str, excerpt: str, matched: list[str], missing: list[
     except httpx.TimeoutException:
         return InsightsResponse(status="timeout", model=model, message="Gemini timed out. Try again shortly.")
     except errors.APIError as exc:
+        if exc.code == 404:
+            return InsightsResponse(
+                status="model_unavailable", model=model,
+                message="This Gemini model is unavailable for the configured project.",
+            )
         if exc.code == 429:
             return InsightsResponse(status="quota", model=model, message="Gemini quota is exhausted. Try again later.")
         if exc.code in {408, 504}:
