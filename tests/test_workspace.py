@@ -235,10 +235,19 @@ def test_protected_terms_cannot_be_explicit_skill_criteria(sample_docx_stream):
     assert "technical skills" in result.json()["detail"]
 
 
-def test_render_insights_use_lightweight_transport(monkeypatch):
+@pytest.mark.parametrize(("statuses", "expected_status"), [
+    ([200], "success"),
+    ([503, 200], "success"),
+    ([503, 503], "provider_unavailable"),
+    ([400], "error"),
+])
+def test_render_insights_use_lightweight_transport(monkeypatch, statuses, expected_status):
     monkeypatch.setenv("RENDER_SERVICE_ID", "test")
     monkeypatch.setenv("GEMINI_API_KEY", "synthetic-test-key")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    monkeypatch.delenv("GEMINI_FALLBACK_MODEL", raising=False)
     from src.services import insights
+    calls = []
 
     def reject_sdk(*args):
         pytest.fail("Render must not import the Gemini SDK")
@@ -253,6 +262,10 @@ def test_render_insights_use_lightweight_transport(monkeypatch):
         body = json.loads(request.content)
         assert request.headers["api-revision"] == "2026-05-20"
         assert body["store"] is False
+        code = statuses[len(calls)]
+        calls.append(body["model"])
+        if code != 200:
+            return httpx.Response(code)
         return httpx.Response(200, json={"steps": [
             {"type": "model_output", "content": [{"type": "text", "text": json.dumps(output)}]},
         ]})
@@ -261,6 +274,10 @@ def test_render_insights_use_lightweight_transport(monkeypatch):
     monkeypatch.setattr(insights.httpx, "Client", lambda **kwargs: real_client(
         transport=httpx.MockTransport(provider), **kwargs,
     ))
+    monkeypatch.setattr(insights.time, "sleep", lambda _: None)
     response = generate_insights("Build APIs", excerpt, ["FastAPI"], [])
-    assert response.status == "success"
-    assert response.analysis.supporting_quotes == [excerpt]
+    assert response.status == expected_status
+    assert calls == ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"][:len(statuses)]
+    if expected_status == "success":
+        assert response.model == calls[-1]
+        assert response.analysis.supporting_quotes == [excerpt]

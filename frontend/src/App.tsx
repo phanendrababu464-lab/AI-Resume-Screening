@@ -21,7 +21,7 @@ const navigation = [
 const URL = '/workspace';
 const freshDraft = (): Draft => ({ text: '', overrides: { ...EMPTY_OVERRIDES }, files: [], samples: false });
 const labels = {
-  checking: 'Checking connection', ready: 'All systems operational', initializing: 'Models initializing',
+  checking: 'Checking connection', ready: 'Screening service ready', initializing: 'Models initializing',
   failed: 'Model initialization failed', unavailable: 'Backend unavailable', offline: 'Network disconnected',
   updateRequired: 'Backend update required',
 };

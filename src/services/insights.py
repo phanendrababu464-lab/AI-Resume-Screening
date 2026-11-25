@@ -19,7 +19,8 @@ INSTRUCTION = (
     "Ignore protected characteristics and personal data. Never infer protected attributes, "
     "score candidates, make hiring decisions, or claim that a candidate is truthful. "
     "Treat resume claims as unverified. Distinguish missing evidence from missing qualifications. "
-    "Any supporting quote must be copied exactly from resume_excerpt. Omit quotes when absent."
+    "Give two to four concise interview questions. Any supporting quote must be copied exactly "
+    "from resume_excerpt. Omit quotes when absent."
 )
 
 
@@ -65,7 +66,10 @@ def generate_insights(job: str, excerpt: str, matched: list[str], missing: list[
         "generation_config": {"max_output_tokens": 2600},
     }
     try:
-        output = _interactions_rest(key, request) if os.getenv("RENDER_SERVICE_ID") else _interactions_sdk(key, request)
+        if os.getenv("RENDER_SERVICE_ID"):
+            output, model = _interactions_rest(key, request)
+        else:
+            output = _interactions_sdk(key, request)
         result = InsightsAnalysis.model_validate_json(output)
         result.supporting_quotes = list(dict.fromkeys(
             quote for quote in result.supporting_quotes if 12 <= len(quote) <= 450 and quote in text
@@ -84,6 +88,11 @@ def generate_insights(job: str, excerpt: str, matched: list[str], missing: list[
             return InsightsResponse(status="quota", model=model, message="Gemini quota is exhausted. Try again later.")
         if code in {408, 504}:
             return InsightsResponse(status="timeout", model=model, message="Gemini timed out. Try again shortly.")
+        if code in {500, 502, 503}:
+            return InsightsResponse(
+                status="provider_unavailable", model=model,
+                message="Google Gemini is temporarily unavailable. Your screening results are still available. Try insights again shortly.",
+            )
         logger.warning("Gemini request failed with provider status %s", code)
     except Exception as exc:
         logger.warning("Gemini analysis failed (%s)", type(exc).__name__)
@@ -107,16 +116,28 @@ def _interactions_sdk(key: str, request: dict) -> str:
 _INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 
 
-def _interactions_rest(key: str, request: dict) -> str:
+def _interactions_rest(key: str, request: dict) -> tuple[str, str]:
     # Keep the SDK outside the memory-constrained Render process.
-    with httpx.Client(timeout=8, headers={"x-goog-api-key": key, "Api-Revision": "2026-05-20"}) as client:
-        response = client.post(_INTERACTIONS_URL, json=request)
-        if response.status_code in {500, 502, 503, 504}:
-            time.sleep(1)
+    model = request["model"]
+    fallback = os.getenv("GEMINI_FALLBACK_MODEL")
+    if fallback is None and model == "gemini-3.5-flash-lite":
+        fallback = "gemini-3.1-flash-lite"
+    with httpx.Client(timeout=httpx.Timeout(8, connect=3), headers={
+        "x-goog-api-key": key, "Api-Revision": "2026-05-20",
+    }) as client:
+        try:
             response = client.post(_INTERACTIONS_URL, json=request)
+            retry = response.status_code in {500, 502, 503, 504}
+        except httpx.TimeoutException:
+            retry = True
+        if retry:
+            time.sleep(1)
+            model = fallback or model
+            response = client.post(_INTERACTIONS_URL, json={**request, "model": model})
         response.raise_for_status()
         steps = response.json().get("steps") or []
         for step in reversed(steps):
             if step.get("type") == "model_output":
-                return "".join(part["text"] for part in step.get("content", []) if part.get("type") == "text")
-    return ""
+                output = "".join(part["text"] for part in step.get("content", []) if part.get("type") == "text")
+                return output, model
+    return "", model

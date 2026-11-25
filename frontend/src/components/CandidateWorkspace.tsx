@@ -141,10 +141,10 @@ export function Insights({ session, candidate, onSelect }: { session: ScreenResp
 
   return <div className="stack">
     <section className="panel stack"><div className="panel-heading"><label>Candidate<select value={candidateId(candidate)} onChange={event => onSelect(event.target.value)}>{session.rankings.map(item => <option key={candidateId(item)} value={candidateId(item)}>{item.candidate}</option>)}</select></label><button className="button primary" disabled={busy} onClick={run}><Sparkles size={17} />{busy ? 'Generating insights…' : error || (result && !analysis) ? 'Retry insights' : 'Generate insights'}</button></div>
-    <p className="muted">This sends job information, extracted skills{candidate.resume_snippet ? ' and a resume excerpt' : ''} to Google Gemini. Review all model interpretations against the resume.</p>
+    <p className="muted">This sends job information and extracted skills{candidate.resume_snippet ? ' plus a resume excerpt' : ''} to Google Gemini. Review all model interpretations against the resume.</p>
     {(error || result?.message) && <p className="notice danger" role="alert">{error || result?.message}</p>}</section>
     <section className="panel stack"><h2>Extracted evidence</h2><List items={candidate.matched_skills} /><h3>Required qualifications without detected evidence</h3><List items={candidate.missing_required_skills} /></section>
-    {analysis && <section className="panel stack"><p className="eyebrow">GEMINI INTERPRETATION · HUMAN REVIEW REQUIRED</p><h2>{analysis.summary}</h2><div className="content-grid">{([
+    {analysis && <section className="panel stack"><p className="eyebrow">GEMINI INTERPRETATION · HUMAN REVIEW REQUIRED</p><h2>{analysis.summary}</h2>{result.model && <p className="muted">Model {result.model}</p>}<div className="content-grid">{([
       ['Technical strengths', analysis.strengths], ['Experience observations', analysis.experience_observations],
       ['Qualifications to review', analysis.missing_qualifications], ['Areas to verify', analysis.areas_to_verify],
       ['Interview questions', analysis.interview_questions], ['Quotes from the submitted excerpt', analysis.supporting_quotes],

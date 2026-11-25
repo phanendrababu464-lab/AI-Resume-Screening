@@ -51,7 +51,7 @@ test('recovers readiness on request and saves theme choice', async () => {
   const user = visit('/workspace/status');
   expect(await screen.findByRole('heading', { name: 'Backend unavailable' })).toBeTruthy();
   await user.click(screen.getByRole('button', { name: 'Check again' }));
-  expect(await screen.findByRole('heading', { name: 'All systems operational' })).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'Screening service ready' })).toBeTruthy();
   await user.click(screen.getByRole('link', { name: 'Settings' }));
   await user.click(screen.getByRole('button', { name: 'Dark' }));
   await waitFor(() => expect(document.documentElement.classList.contains('dark')).toBe(true));
