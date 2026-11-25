@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 from contextlib import asynccontextmanager
+import ctypes
 import csv
 import io
 import logging
@@ -10,6 +11,7 @@ import math
 import os
 from pathlib import Path
 import re
+import sys
 import time
 from typing import Any, Optional
 import urllib.parse
@@ -24,6 +26,7 @@ from src.services.insights import InsightsResponse, generate_insights
 
 from src.config import (
     EMBEDDING_MODEL_NAME,
+    EMBEDDING_DTYPE,
     EMBEDDING_REVISION,
     TFIDF_MAX_NGRAM,
     MAX_BATCH_SIZE_BYTES,
@@ -76,6 +79,21 @@ _SCREENING_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
     thread_name_prefix="screening_worker",
 )
 
+# The glibc allocator may retain freed inference buffers in a low-memory container.
+_trim_memory = getattr(ctypes.CDLL(None), "malloc_trim", None) if sys.platform == "linux" else None
+if _trim_memory is not None:
+    _trim_memory.argtypes = [ctypes.c_size_t]
+    _trim_memory.restype = ctypes.c_int
+
+
+def _run_worker(function, *args):
+    try:
+        return function(*args)
+    finally:
+        if _trim_memory is not None:
+            _trim_memory(0)
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     application.state.models = "initializing"
@@ -121,7 +139,7 @@ async def _warm_up_model() -> None:
         get_skill_extractor()
 
     try:
-        await asyncio.get_running_loop().run_in_executor(_SCREENING_EXECUTOR, load)
+        await asyncio.get_running_loop().run_in_executor(_SCREENING_EXECUTOR, _run_worker, load)
     except Exception as exc:
         app.state.models = "failed"
         logger.error("Model initialization failed (%s)", type(exc).__name__)
@@ -149,7 +167,7 @@ async def run_ml(function, *args):
         if not future.cancelled():
             future.exception()
 
-    future = asyncio.get_running_loop().run_in_executor(_SCREENING_EXECUTOR, function, *args)
+    future = asyncio.get_running_loop().run_in_executor(_SCREENING_EXECUTOR, _run_worker, function, *args)
     future.add_done_callback(finished)
     try:
         return await asyncio.wait_for(asyncio.shield(future), timeout=105)
@@ -495,6 +513,7 @@ async def get_model_info():
         "skills": "spaCy en_core_web_sm / technical taxonomy",
         "keyword": f"TF-IDF (1–{TFIDF_MAX_NGRAM} grams)",
         "embedding_revision": EMBEDDING_REVISION,
+        "embedding_precision": EMBEDDING_DTYPE,
         "gemini": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
     }
 

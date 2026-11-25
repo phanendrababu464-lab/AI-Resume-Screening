@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 from src.anonymizer import anonymize_text, redact_protected_attributes
 from src.config import (
     DEFAULT_DEVICE,
+    EMBEDDING_DTYPE,
     DEFAULT_EXPERIENCE_PENALTY,
     DEFAULT_EXPERIENCE_WEIGHT,
     DEFAULT_PREFERRED_SKILL_WEIGHT,
@@ -70,6 +71,7 @@ def get_sentence_model() -> SentenceTransformer:
         torch.set_num_threads(int(os.getenv("OMP_NUM_THREADS", "1")))
         _SENTENCE_MODEL = SentenceTransformer(
             model_path, device=DEFAULT_DEVICE, local_files_only=True, trust_remote_code=False,
+            model_kwargs={"dtype": {"float16": torch.float16, "float32": torch.float32}[EMBEDDING_DTYPE]},
         )
     return _SENTENCE_MODEL
 
@@ -458,6 +460,7 @@ def rank(
             all_embs = model.encode(
                 [jd_sem_text] + valid_texts, batch_size=4, convert_to_numpy=True, show_progress_bar=False,
             )
+            all_embs = np.asarray(all_embs, dtype=np.float32)
             jd_emb = np.atleast_2d(all_embs[0])
             cand_embs = np.atleast_2d(all_embs[1:])
             sims = cosine_similarity(jd_emb, cand_embs)[0]
