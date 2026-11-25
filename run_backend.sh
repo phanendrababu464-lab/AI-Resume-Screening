@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$REPO_ROOT"
-
-PORT="${PORT:-8000}"
-HOST="${HOST:-0.0.0.0}"
-
-echo "Starting AI Resume Screening backend on ${HOST}:${PORT}..."
-exec python -m uvicorn src.api:app --host "${HOST}" --port "${PORT}"
+cd "$(dirname "${BASH_SOURCE[0]}")"
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
+export TOKENIZERS_PARALLELISM=false
+if [[ -x .venv/bin/python ]]; then
+  exec .venv/bin/python -m uvicorn src.api:app --host "${HOST:-0.0.0.0}" --port "${PORT:-8000}"
+fi
+exec python -m uvicorn src.api:app --host "${HOST:-0.0.0.0}" --port "${PORT:-8000}"

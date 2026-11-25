@@ -1,31 +1,3 @@
-"""FastAPI Backend for Resume Screening Web Application.
-
-Exposes REST endpoints for:
-- Health check (/api/health)
-- Samples retrieval (/api/samples)
-- Sample resume binary retrieval (/api/samples/resume/{filename:path})
-- Real-time job analysis (/api/jobs/analyze)
-- Resume screening & ranking (/api/screen)
-- Results export to CSV (/api/export)
-
-## Production architecture notes (Render free tier)
-
-The /api/screen endpoint performs CPU-bound ML inference (SentenceTransformer.encode)
-that can take 5-8 seconds on first call (cold model load) and <0.3s on subsequent warm
-calls. On Render's free tier, one uvicorn worker handles all requests.
-
-ROOT CAUSE OF 502/503/429:
-- `async def screen_resumes_endpoint` calls `rank()` synchronously inside the event loop.
-- `rank()` calls `SentenceTransformer.encode()` which is a pure CPU blocking operation.
-- While encode() runs, the event loop is fully blocked → no other request (including
-  /api/health) can be processed → Render's upstream proxy eventually times out → 502.
-- Subsequent health checks pile up → 429 (rate limit hit on the proxy level) or 503.
-
-FIX: Run the CPU-bound screening work in a thread-pool executor via
-asyncio.get_event_loop().run_in_executor() so the event loop stays free to serve
-health checks and other lightweight requests while screening is in progress.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -34,6 +6,7 @@ from contextlib import asynccontextmanager
 import csv
 import io
 import logging
+import math
 import os
 from pathlib import Path
 import re
@@ -41,12 +14,18 @@ import time
 from typing import Any, Optional
 import urllib.parse
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.formparsers import MultiPartException
+from src.services.document_service import check_document, read_job_text
+from src.services.insights import InsightsResponse, generate_insights
 
 from src.config import (
+    EMBEDDING_MODEL_NAME,
+    EMBEDDING_REVISION,
+    TFIDF_MAX_NGRAM,
     MAX_BATCH_SIZE_BYTES,
     MAX_FILE_SIZE_BYTES,
     MAX_RESUMES_PER_BATCH,
@@ -60,7 +39,6 @@ from src.schemas import (
 from src.services.gemini_service import (
     GeminiValidationResult,
     is_gemini_available,
-    validate_candidate_with_gemini,
 )
 from src.services.screening_service import (
     analyze_job,
@@ -71,6 +49,7 @@ from src.services.screening_service import (
     get_score_composition_chart_data,
     get_skill_matrix_chart_data,
     get_sentence_model,
+    get_skill_extractor,
     parse_resumes,
     rank,
 )
@@ -99,8 +78,14 @@ _SCREENING_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    await _warm_up_model()
-    yield
+    application.state.models = "initializing"
+    task = asyncio.create_task(_warm_up_model())
+    try:
+        yield
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        del application.state.models
 
 
 app = FastAPI(
@@ -126,39 +111,121 @@ if cors_origins_env:
 else:
     allowed_origins = default_allowed_origins
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_origin_regex=r"^https://.*\.vercel\.app$",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 
 # ---------------------------------------------------------------------------
 # Warm up ML model on startup (avoid first-request cold-start penalty)
 # ---------------------------------------------------------------------------
 async def _warm_up_model() -> None:
-    """Pre-load SentenceTransformer in the screening thread-pool on startup.
+    def load() -> None:
+        get_skill_extractor()
+        get_sentence_model().encode(["warmup"], show_progress_bar=False, convert_to_numpy=True)
 
-    Prevents the first real /api/screen request from blocking 5-8 seconds
-    while the model is loaded from disk.
-    """
-    loop = asyncio.get_event_loop()
+    try:
+        await asyncio.get_running_loop().run_in_executor(_SCREENING_EXECUTOR, load)
+    except Exception as exc:
+        app.state.models = "failed"
+        logger.error("Model initialization failed (%s)", type(exc).__name__)
+    else:
+        app.state.models = "ready"
+        logger.info("Screening models ready")
 
-    def _load() -> None:
-        t0 = time.time()
+
+_pending_ml = 0
+
+
+async def run_ml(function, *args):
+    """Keep a slot until the thread finishes, even if the HTTP request ends."""
+    global _pending_ml
+    state = getattr(app.state, "models", "ready")
+    if state != "ready":
+        raise HTTPException(503, detail="Screening models are " + state + ".", headers={"Retry-After": "10"})
+    if _pending_ml >= 2:
+        raise HTTPException(503, detail="Screening is busy. Try again shortly.", headers={"Retry-After": "10"})
+    _pending_ml += 1
+
+    def finished(future):
+        global _pending_ml
+        _pending_ml -= 1
+        if not future.cancelled():
+            future.exception()
+
+    future = asyncio.get_running_loop().run_in_executor(_SCREENING_EXECUTOR, function, *args)
+    future.add_done_callback(finished)
+    try:
+        return await asyncio.wait_for(asyncio.shield(future), timeout=105)
+    except TimeoutError as exc:
+        raise HTTPException(504, detail="Processing timed out. Try a smaller batch.") from exc
+
+
+class RequestLimits:
+    def __init__(self, app):
+        self.app = app
+        self.uploads = 0
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path")
+        if scope["type"] != "http" or scope.get("method") != "POST":
+            return await self.app(scope, receive, send)
+        upload = path in {"/api/screen", "/api/jobs/document"}
+        limit = MAX_BATCH_SIZE_BYTES + 1024 * 1024 if path == "/api/screen" else MAX_FILE_SIZE_BYTES + 1024 * 1024 if upload else 512 * 1024
+        length = dict(scope["headers"]).get(b"content-length", b"0")
+        if not length.isdigit() or int(length) > limit:
+            return await JSONResponse({"detail": "Request exceeds the upload limit."}, 413)(scope, receive, send)
+        if upload and self.uploads >= 2:
+            return await JSONResponse({"detail": "Uploads are busy. Try again shortly."}, 503, headers={"Retry-After": "10"})(scope, receive, send)
+        self.uploads += int(upload)
+        received = 0
+
+        async def bounded_receive():
+            nonlocal received
+            message = await receive()
+            received += len(message.get("body", b""))
+            if received > limit:
+                if upload:
+                    raise MultiPartException("Request exceeds the upload limit.")
+                raise HTTPException(413, detail="Request exceeds the upload limit.")
+            return message
+
+        async def send_private(message):
+            if message["type"] == "http.response.start":
+                message["headers"] = [*message.get("headers", []), (b"cache-control", b"no-store")]
+            await send(message)
+
         try:
-            model = get_sentence_model()
-            # Run one encode to populate torch JIT caches
-            model.encode(["warmup"], show_progress_bar=False, convert_to_numpy=True)
-            logger.info("SentenceTransformer warm-up complete in %.2fs", time.time() - t0)
-        except Exception as exc:  # pragma: no cover
-            logger.warning("SentenceTransformer warm-up failed (non-fatal): %s", exc)
+            await self.app(scope, bounded_receive, send_private)
+        finally:
+            self.uploads -= int(upload)
 
-    await loop.run_in_executor(_SCREENING_EXECUTOR, _load)
 
+async def read_document(upload: UploadFile) -> io.BytesIO:
+    filename = upload.filename or ""
+    name = re.split(r"[/\\]", filename)[-1]
+    ext = Path(name).suffix.lower()
+    name = name[:200 - len(ext)] + name[-len(ext):] if ext and len(name) > 200 else name
+    mime = {
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+    if ext not in mime:
+        raise HTTPException(400, detail="Unsupported file type. Use PDF or DOCX.")
+    if upload.content_type not in {None, "", "application/octet-stream", mime[ext]}:
+        raise HTTPException(400, detail="The document MIME type does not match its extension.")
+    content = await upload.read(MAX_FILE_SIZE_BYTES + 1)
+    if len(content) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(400, detail=f"File exceeds {MAX_FILE_SIZE_BYTES / (1024 * 1024):g} MB limit.")
+    stream = io.BytesIO(content)
+    stream.name = name
+    return stream
+
+
+app.add_middleware(RequestLimits)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -183,7 +250,7 @@ def sanitize_csv_cell(value: Any) -> Any:
     if value is None:
         return ""
     val_str = str(value)
-    if val_str and val_str[0] in ("=", "+", "-", "@"):
+    if val_str and (val_str[0] in "\t\r\n" or val_str.lstrip().lstrip("\ufeff").startswith(("=", "+", "-", "@"))):
         return f"'{val_str}"
     return val_str
 
@@ -197,6 +264,7 @@ def _run_screening_sync(
     job_text: str,
     weights: WeightConfig,
     anonymize: bool = False,
+    overrides: dict | None = None,
 ) -> tuple[JobAnalysis, list[Any], list[Any], list[CandidateRanking], Recommendation, dict[str, Any], list[str], dict[str, float], Optional[str]]:
     """Execute the full ML screening pipeline synchronously.
 
@@ -210,6 +278,16 @@ def _run_screening_sync(
     file_errors: list[Any] = []
 
     job_analysis = analyze_job(job_text)
+    if overrides:
+        extractor = get_skill_extractor()
+        for field, value in overrides.items():
+            if field.endswith("_skills"):
+                skills = [extractor.extract_skills(word) or [word.strip()] for word in value.split(",") if word.strip()]
+                value = list(dict.fromkeys(skill for group in skills for skill in group))
+            setattr(job_analysis, field, value)
+        required = {skill.casefold() for skill in job_analysis.required_skills}
+        job_analysis.preferred_skills = [skill for skill in job_analysis.preferred_skills if skill.casefold() not in required]
+        job_analysis.all_skills = job_analysis.required_skills + job_analysis.preferred_skills
     app_comp, non_app_comp, eff_w, note = get_applicable_components(job_analysis, weights)
 
     # Parse all resumes, collecting per-file errors without aborting batch
@@ -218,15 +296,23 @@ def _run_screening_sync(
         fname = getattr(item, "name", str(item))
         base_name = f"Candidate {index}" if anonymize else Path(fname).name
         try:
+            if isinstance(item, io.BytesIO):
+                check_document(item)
             prs = parse_resumes([item])
+            if not prs or not prs[0].raw_text.strip():
+                raise ValueError("Document contains no readable text.")
             if anonymize:
-                for resume in prs:
-                    resume.filename = base_name
+                prs[0].filename = base_name
+            elif weights.skill_weight is not None:
+                prs[0].source_filename = base_name
+                existing = {resume.filename for resume in parsed_resumes}
+                while prs[0].filename in existing:
+                    prs[0].filename += f" ({index})"
             if prs:
                 parsed_resumes.extend(prs)
         except Exception as exc:
-            safe_msg = "Could not parse resume." if anonymize else clean_error_message(str(exc))
-            logger.warning("Resume parse error for %s: %s", base_name, safe_msg)
+            safe_msg = "Could not read the document. Use a text-based PDF or valid DOCX."
+            logger.info("Resume rejected (%s)", type(exc).__name__)
             file_errors.append({"filename": base_name, "error": safe_msg})
 
     if not parsed_resumes:
@@ -239,6 +325,14 @@ def _run_screening_sync(
         "Ranked %d candidates in %.2fs", len(rankings), time.time() - t0
     )
 
+    if weights.skill_weight is not None and not anonymize:
+        for candidate in rankings:
+            resume = parsed_resumes[int(candidate.candidate_id) - 1]
+            candidate.resume_filename = resume.source_filename or resume.filename
+            named = re.search(r"(?im)^\s*(?:candidate name|name)\s*:\s*([^\r\n]{2,100})$", resume.raw_text[:1000])
+            if named:
+                candidate.candidate_name = named.group(1).strip()
+
     if anonymize:
         for candidate in rankings:
             candidate.resume_snippet = ""
@@ -248,7 +342,7 @@ def _run_screening_sync(
 
     # Chart datasets
     overall_chart = get_overall_ranking_chart_data(rankings)
-    composition_chart = get_score_composition_chart_data(rankings, weights)
+    composition_chart = get_score_composition_chart_data(rankings, weights, job_analysis if weights.skill_weight is not None else None)
     matrix_chart = get_skill_matrix_chart_data(rankings, job_analysis)
     breakdowns = {r.candidate: get_candidate_breakdown_chart_data(r) for r in rankings}
 
@@ -285,11 +379,11 @@ class HealthResponse(BaseModel):
 
 
 class ValidateResumeRequest(BaseModel):
-    job_text: str
-    candidate_name: str
-    candidate_text: Optional[str] = ""
-    matched_skills: list[str] = Field(default_factory=list)
-    missing_skills: list[str] = Field(default_factory=list)
+    job_text: str = Field(max_length=24000)
+    candidate_name: str = Field(max_length=250)
+    candidate_text: Optional[str] = Field(default="", max_length=10000)
+    matched_skills: list[str] = Field(default_factory=list, max_length=100)
+    missing_skills: list[str] = Field(default_factory=list, max_length=100)
 
 
 class SampleJobItem(BaseModel):
@@ -311,7 +405,7 @@ class SamplesResponse(BaseModel):
 
 
 class JobAnalyzeRequest(BaseModel):
-    text: str
+    text: str = Field(max_length=24000)
 
 
 class JobAnalyzeResponse(BaseModel):
@@ -385,20 +479,93 @@ def get_config() -> dict[str, Any]:
     }
 
 
+@app.get("/api/ready")
+async def get_readiness(request: Request):
+    state = getattr(request.app.state, "models", "initializing")
+    return JSONResponse({"status": state}, 200 if state == "ready" else 503)
+
+
+@app.get("/api/model-info")
+async def get_model_info():
+    return {
+        "embedding": EMBEDDING_MODEL_NAME,
+        "skills": "spaCy en_core_web_sm / technical taxonomy",
+        "keyword": f"TF-IDF (1–{TFIDF_MAX_NGRAM} grams)",
+        "embedding_revision": EMBEDDING_REVISION,
+        "gemini": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+    }
+
+
+@app.post("/api/jobs/document")
+async def extract_job_document(file: UploadFile = File(...)):
+    stream = await read_document(file)
+
+    try:
+        result = await run_ml(read_job_text, stream)
+    except ValueError as exc:
+        raise HTTPException(422, detail="Could not read the job description document.") from exc
+    if not result.strip() or len(result) > 24000:
+        raise HTTPException(422, detail="The job document must contain between 1 and 24,000 characters.")
+    return {"text": result}
+
+
+_provider_slots = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="gemini")
+_provider_jobs = 0
+_provider_window: list[float] = []
+
+
+@app.post("/api/insights", response_model=InsightsResponse)
+async def insights(payload: ValidateResumeRequest):
+    global _provider_jobs
+    if not payload.job_text.strip():
+        raise HTTPException(400, detail="A job description is required.")
+    if not is_gemini_available():
+        return InsightsResponse(status="unconfigured", message="Gemini insights are unavailable on this server.")
+
+    now = time.monotonic()
+    _provider_window[:] = [start for start in _provider_window if now - start < 60]
+    if _provider_jobs >= 2 or len(_provider_window) >= 12:
+        raise HTTPException(429, detail="AI insights are busy. Try again shortly.", headers={"Retry-After": "30"})
+    _provider_jobs += 1
+    _provider_window.append(now)
+
+    def finished(future):
+        global _provider_jobs
+        _provider_jobs -= 1
+        if not future.cancelled():
+            future.exception()
+
+    future = asyncio.get_running_loop().run_in_executor(
+        _provider_slots, generate_insights, payload.job_text, payload.candidate_text or "",
+        payload.matched_skills[:60], payload.missing_skills[:60],
+    )
+    future.add_done_callback(finished)
+    try:
+        return await asyncio.wait_for(asyncio.shield(future), 24)
+    except TimeoutError:
+        return InsightsResponse(status="timeout", message="Gemini timed out. Try again shortly.")
+
+
 @app.post("/api/resumes/validate", response_model=GeminiValidationResult)
-def validate_resume_endpoint(payload: ValidateResumeRequest) -> GeminiValidationResult:
+async def validate_resume_endpoint(payload: ValidateResumeRequest) -> GeminiValidationResult:
     """Evaluates candidate depth, authenticity, and generates tailored interview questions via Gemini."""
     if not payload.job_text or not payload.job_text.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Job text cannot be empty for AI validation.",
         )
-    return validate_candidate_with_gemini(
-        job_description=payload.job_text,
-        candidate_name=payload.candidate_name,
-        candidate_text=payload.candidate_text or "",
-        matched_skills=payload.matched_skills,
-        missing_skills=payload.missing_skills,
+    result = await insights(payload)
+    analysis = result.analysis
+    return GeminiValidationResult(
+        status="success" if analysis else ("unconfigured" if result.status == "unconfigured" else "error"),
+        executive_summary=analysis.summary if analysis else (
+            "Set GEMINI_API_KEY to enable AI insights." if result.status == "unconfigured" else result.message or ""
+        ),
+        strengths=analysis.strengths if analysis else [],
+        risks_or_concerns=analysis.areas_to_verify if analysis else [],
+        interview_questions=analysis.interview_questions if analysis else [],
+        model_used=result.model,
+        error_message=result.message,
     )
 
 
@@ -495,12 +662,12 @@ def get_sample_resume_file(filename: str):
 
 
 @app.post("/api/jobs/analyze", response_model=JobAnalyzeResponse)
-def analyze_job_endpoint(payload: JobAnalyzeRequest) -> JobAnalyzeResponse:
+async def analyze_job_endpoint(payload: JobAnalyzeRequest) -> JobAnalyzeResponse:
     """Analyzes job description text and extracts required & preferred skills plus minimum experience."""
     if not payload.text or not payload.text.strip():
         return JobAnalyzeResponse()
 
-    analysis = analyze_job(payload.text)
+    analysis = await run_ml(analyze_job, payload.text)
     job_title = analysis.job_title
     if not job_title:
         for line in analysis.raw_text.splitlines():
@@ -528,11 +695,17 @@ async def screen_resumes_endpoint(
     files: list[UploadFile] = File(default=[]),
     use_sample_resumes: bool = Form(default=False),
     sample_resume_ids: Optional[str] = Form(default=None),
-    required_skill_weight: float = Form(default=0.50),
-    preferred_skill_weight: float = Form(default=0.20),
-    semantic_weight: float = Form(default=0.20),
-    experience_weight: float = Form(default=0.10),
-    experience_penalty: float = Form(default=0.60),
+    required_skill_weight: float | None = Form(default=None, ge=0, le=1),
+    preferred_skill_weight: float = Form(default=0.20, ge=0, le=1),
+    semantic_weight: float | None = Form(default=None, ge=0, le=1),
+    experience_weight: float = Form(default=0.10, ge=0, le=1),
+    keyword_weight: float = Form(default=0.20, ge=0, le=1),
+    skill_weight: float | None = Form(default=None, ge=0, le=1),
+    job_title: str | None = Form(default=None, max_length=120),
+    required_skills: str | None = Form(default=None, max_length=1200),
+    preferred_skills: str | None = Form(default=None, max_length=1200),
+    min_experience_years: float | None = Form(default=None, ge=0, le=60),
+    experience_penalty: float = Form(default=0.60, ge=0, le=1),
     renormalize_weights: bool = Form(default=True),
     anonymize: bool = Form(default=False),
 ) -> ScreenResponse:
@@ -549,10 +722,10 @@ async def screen_resumes_endpoint(
     t_start = time.time()
 
     # 1. Validate Job Text
-    if not job_text or not job_text.strip():
+    if not job_text.strip() or len(job_text) > 24000:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Job description text is required.",
+            detail="Job description text is required and must be at most 24,000 characters.",
         )
 
     # 2. Validate File Count Limit
@@ -563,8 +736,15 @@ async def screen_resumes_endpoint(
         )
 
     # 3. Validate Weight Sums
-    total_weights = required_skill_weight + preferred_skill_weight + semantic_weight + experience_weight
-    if abs(total_weights - 1.0) > 0.005:
+    modern = skill_weight is not None or required_skill_weight is None
+    if modern and skill_weight is None:
+        skill_weight = 0.30
+    if semantic_weight is None:
+        semantic_weight = 0.40 if modern else 0.20
+    required_skill_weight = 0.50 if required_skill_weight is None else required_skill_weight
+    skills_total = skill_weight + keyword_weight if modern else required_skill_weight + preferred_skill_weight
+    total_weights = skills_total + semantic_weight + experience_weight
+    if not math.isclose(total_weights, 1.0, abs_tol=1e-8):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Scoring weights must sum to 1.00 (currently {total_weights:.2f}).",
@@ -578,29 +758,10 @@ async def screen_resumes_endpoint(
         if not uf.filename:
             continue
 
-        ext = Path(uf.filename).suffix.lower()
-        if ext not in ALLOWED_FILE_EXTENSIONS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported file type for '{uf.filename}'. Only PDF and DOCX files are allowed.",
-            )
-
-        content = await uf.read()
-        if len(content) > MAX_FILE_SIZE_BYTES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File '{uf.filename}' exceeds 5 MB limit ({len(content)} bytes).",
-            )
-
-        total_batch_bytes += len(content)
+        stream = await read_document(uf)
+        total_batch_bytes += stream.getbuffer().nbytes
         if total_batch_bytes > MAX_BATCH_SIZE_BYTES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Total batch size exceeds {MAX_BATCH_SIZE_BYTES // (1024 * 1024)} MB limit.",
-            )
-
-        stream = io.BytesIO(content)
-        stream.name = uf.filename
+            raise HTTPException(status_code=413, detail="Total batch exceeds the upload limit.")
         files_to_parse.append(stream)
 
     # 5. Add Sample Resumes if Requested
@@ -636,6 +797,8 @@ async def screen_resumes_endpoint(
         experience_weight=experience_weight,
         experience_penalty=experience_penalty,
         renormalize_weights=renormalize_weights,
+        skill_weight=skill_weight,
+        keyword_weight=keyword_weight,
     )
 
     logger.info(
@@ -646,7 +809,10 @@ async def screen_resumes_endpoint(
 
     # 6. Offload ALL CPU-bound screening work to the dedicated thread-pool
     #    so the event loop remains free to serve /api/health during this time.
-    loop = asyncio.get_event_loop()
+    overrides = {key: value for key, value in {
+        "job_title": job_title, "required_skills": required_skills,
+        "preferred_skills": preferred_skills, "min_experience_years": min_experience_years,
+    }.items() if value is not None}
     try:
         (
             job_analysis,
@@ -658,22 +824,24 @@ async def screen_resumes_endpoint(
             non_app_comp,
             eff_w,
             note,
-        ) = await loop.run_in_executor(
-            _SCREENING_EXECUTOR,
+        ) = await run_ml(
             _run_screening_sync,
             files_to_parse,
             job_text,
             weights,
             anonymize,
+            overrides,
         )
+    except HTTPException:
+        raise
     except ValueError as exc:
         # Raised by _run_screening_sync when ALL resumes fail parsing
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         )
     except Exception as exc:
-        logger.error("Unexpected screening error: %s", exc, exc_info=True)
+        logger.error("Unexpected screening error (%s)", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred during resume screening. Please try again.",
@@ -701,8 +869,25 @@ async def screen_resumes_endpoint(
     )
 
 
+class ComparisonRequest(BaseModel):
+    candidates: list[CandidateRanking] = Field(min_length=2, max_length=6)
+
+
+@app.post("/api/compare")
+async def compare(payload: ComparisonRequest):
+    return {"candidates": [{
+        "id": candidate.candidate_id,
+        "label": candidate.candidate,
+        "overall": candidate.match_score,
+        "scores": candidate.component_scores,
+        "matched": candidate.matched_skills,
+        "missing": candidate.missing_required_skills,
+        "experience_years": candidate.experience_years,
+    } for candidate in payload.candidates]}
+
+
 class ExportRequest(BaseModel):
-    rankings: list[dict[str, Any]]
+    rankings: list[dict[str, Any]] = Field(max_length=100)
     job_title: Optional[str] = "Screening Results"
 
 
@@ -721,7 +906,12 @@ def export_csv_endpoint(payload: ExportRequest):
         "Preferred Skill Score",
         "Semantic Score",
         "Experience Score",
-        "TF-IDF Baseline Score",
+        "Keyword Relevance (TF-IDF)",
+        "Skill Match",
+        "Experience Evidence (Years)",
+        "Shortlisted",
+        "Extracted Name",
+        "Resume Filename",
         "Matched Required Skills",
         "Missing Required Skills",
         "Related Skills Matched",
@@ -739,6 +929,11 @@ def export_csv_endpoint(payload: ExportRequest):
             cs.get("semantic_score", ""),
             cs.get("experience_score", ""),
             cs.get("tfidf_baseline_score", ""),
+            cs.get("skill_score", ""),
+            r.get("experience_years"),
+            "Yes" if r.get("shortlisted") else "No",
+            r.get("candidate_name"),
+            r.get("resume_filename"),
             "; ".join(r.get("matched_required_skills", [])),
             "; ".join(r.get("missing_required_skills", [])),
             "; ".join(r.get("related_skills_matched", [])),

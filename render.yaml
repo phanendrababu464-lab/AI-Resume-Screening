@@ -3,11 +3,16 @@ services:
     name: ai-resume-screening-backend
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python -m uvicorn src.api:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install uv==0.13.9 && uv sync --frozen --no-dev && uv run --frozen --no-dev python -m src.warm_cache
+    startCommand: ./run_backend.sh
+    healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
+      - key: HF_HUB_OFFLINE
+        value: "1"
+      - key: MAX_RESUMES_PER_BATCH
+        value: "25"
       - key: GEMINI_API_KEY
         sync: false
       - key: CORS_ORIGINS

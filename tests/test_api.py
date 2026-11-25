@@ -282,21 +282,21 @@ def test_screen_20_and_100_files_accepted() -> None:
     assert resp_100.json()["total_candidates"] == 100
 
 
-def test_screen_total_batch_size_cap_exceeded() -> None:
-    """Verifies /api/screen rejects batches exceeding the total batch size cap with HTTP 400."""
-    # 41 files of 5 MB each = 205 MB > 200 MB cap (each file is within 5 MB single-file limit)
-    chunk = b"A" * (5 * 1024 * 1024)
+def test_screen_total_batch_size_cap_exceeded(monkeypatch) -> None:
+    """Reject the oversized request before parsing multipart uploads."""
+    monkeypatch.setattr("src.api.MAX_BATCH_SIZE_BYTES", 1024 * 1024)
+    chunk = b"A" * (1024 * 1024)
     files = [
         ("files", (f"resume_{i}.pdf", chunk, "application/pdf"))
-        for i in range(41)
+        for i in range(3)
     ]
     response = client.post(
         "/api/screen",
         data={"job_text": "Python Job"},
         files=files,
     )
-    assert response.status_code == 400
-    assert "Total batch size exceeds" in response.json()["detail"]
+    assert response.status_code == 413
+    assert "upload limit" in response.json()["detail"]
 
 
 def test_screen_one_corrupted_file_among_good_ones() -> None:

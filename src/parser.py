@@ -31,15 +31,16 @@ def extract_text_from_pdf(file_source: FileSource) -> str:
     """
     text_segments: list[str] = []
     try:
-        with pdfplumber.open(file_source) as pdf:
+        with pdfplumber.open(file_source, pages=range(1, 31)) as pdf:
             for page in pdf.pages:
                 extracted = page.extract_text()
+                page.close()
                 if extracted:
                     text_segments.append(extracted)
     except Exception as exc:
         raise ValueError(f"Failed to extract text from PDF: {exc}") from exc
 
-    return "\n".join(text_segments).strip()
+    return "\n".join(text_segments).strip()[:100_000]
 
 
 def extract_text_from_docx(file_source: FileSource) -> str:
@@ -71,7 +72,7 @@ def extract_text_from_docx(file_source: FileSource) -> str:
                 if row_texts:
                     text_segments.append(" | ".join(row_texts))
 
-        return "\n".join(text_segments).strip()
+        return "\n".join(text_segments).strip()[:100_000]
     except Exception as exc:
         raise ValueError(f"Failed to extract text from DOCX: {exc}") from exc
 

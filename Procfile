@@ -1,1 +1,1 @@
-web: python -m uvicorn src.api:app --host 0.0.0.0 --port $PORT
+web: ./run_backend.sh

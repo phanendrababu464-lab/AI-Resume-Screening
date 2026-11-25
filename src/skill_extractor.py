@@ -192,7 +192,7 @@ class TechnicalSkillExtractor:
             skills_list: Optional explicit list of skills (takes precedence over file).
             custom_aliases: Optional dictionary of additional alias mappings.
         """
-        self.nlp = spacy.blank("en")
+        self.nlp = spacy.load("en_core_web_sm", enable=[])
         self.matcher = PhraseMatcher(self.nlp.vocab, attr="LOWER")
 
         if skills_list is not None:

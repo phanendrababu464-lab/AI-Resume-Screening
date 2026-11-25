@@ -27,7 +27,9 @@ if _env_path.is_file():
         pass
 
 # Model and inference configurations
-EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+TFIDF_MAX_NGRAM = int(os.getenv("TFIDF_MAX_NGRAM", "2"))
 DEFAULT_DEVICE: str = "cpu"
 
 # Supported resume file extensions
@@ -36,7 +38,7 @@ ALLOWED_EXTENSIONS: set[str] = {".pdf", ".docx"}
 # Maximum batch and upload limits
 MAX_RESUMES_PER_BATCH: int = int(os.getenv("MAX_RESUMES_PER_BATCH", "100"))
 MAX_FILE_SIZE_BYTES: int = int(os.getenv("MAX_FILE_SIZE_BYTES", str(5 * 1024 * 1024)))  # 5 MB
-MAX_BATCH_SIZE_BYTES: int = int(os.getenv("MAX_BATCH_SIZE_BYTES", str(200 * 1024 * 1024)))  # 200 MB
+MAX_BATCH_SIZE_BYTES: int = int(os.getenv("MAX_BATCH_SIZE_BYTES", str(25 * 1024 * 1024)))  # 25 MB
 
 # Google Gemini API configuration
 # Accepts either GEMINI_API_KEY (modern standard) or GOOGLE_API_KEY as fallback

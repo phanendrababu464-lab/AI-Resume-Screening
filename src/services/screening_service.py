@@ -28,6 +28,8 @@ from src.config import (
     DEFAULT_REQUIRED_SKILL_WEIGHT,
     DEFAULT_SEMANTIC_SIMILARITY_WEIGHT,
     EMBEDDING_MODEL_NAME,
+    EMBEDDING_REVISION,
+    TFIDF_MAX_NGRAM,
     RELATED_SKILLS_FILE,
 )
 from src.job_parser import extract_min_experience_years, parse_job_description
@@ -72,7 +74,7 @@ def get_sentence_model() -> SentenceTransformer:
     """Returns a cached singleton instance of SentenceTransformer on CPU."""
     global _SENTENCE_MODEL
     if _SENTENCE_MODEL is None:
-        _SENTENCE_MODEL = SentenceTransformer(EMBEDDING_MODEL_NAME, device=DEFAULT_DEVICE)
+        _SENTENCE_MODEL = SentenceTransformer(EMBEDDING_MODEL_NAME, device=DEFAULT_DEVICE, revision=EMBEDDING_REVISION, trust_remote_code=False)
     return _SENTENCE_MODEL
 
 
@@ -118,6 +120,16 @@ def extract_candidate_experience_years(text: str) -> Optional[float]:
             except (ValueError, IndexError):
                 continue
     return extract_min_experience_years(text)
+
+
+def extract_evidenced_experience(text: str) -> float | None:
+    """Accept explicit experience statements and ignore standalone durations."""
+    match = re.search(
+        r"(?<![\d.])(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)"
+        r"\s+(?:of\s+)?(?:(?:professional|relevant|technical|work|hands-on)\s+)?experience\b",
+        text, re.IGNORECASE,
+    )
+    return float(match.group(1)) if match and float(match.group(1)) <= 60 else None
 
 
 def analyze_job(text: str) -> JobAnalysis:
@@ -261,6 +273,21 @@ def get_applicable_components(
     Returns:
         (applicable_list, non_applicable_list, effective_weights_dict, redistribution_note)
     """
+    if weights.skill_weight is not None:
+        factors = {
+            "semantic": weights.semantic_weight,
+            "keyword": weights.keyword_weight,
+            "skills": weights.skill_weight,
+            "experience": weights.experience_weight,
+        }
+        missing = []
+        if not (job.required_skills or job.preferred_skills):
+            missing.append("skills")
+        if not job.min_experience_years:
+            missing.append("experience")
+        note = "Unspecified criteria contribute zero points." if missing else None
+        return list(factors), missing, factors, note
+
     applicable: list[str] = []
     if job.required_skills:
         applicable.append("required")
@@ -396,6 +423,10 @@ def rank(
             if src_t:
                 pr.experience_years = extract_candidate_experience_years(src_t)
 
+    if weight_cfg.skill_weight is not None:
+        for pr in parsed_resumes:
+            pr.experience_years = extract_evidenced_experience(pr.sections.experience or pr.raw_text)
+
     # 4. Text preparation for semantic similarity & TF-IDF
     jd_sem_text = job_obj.cleaned_text if job_obj.cleaned_text.strip() else job_obj.raw_text
     cand_sem_texts: list[str] = []
@@ -412,7 +443,7 @@ def rank(
     if jd_sem_text.strip():
         valid_indices = [i for i, t in enumerate(cand_sem_texts) if t]
         if valid_indices:
-            valid_texts = [cand_sem_texts[i] for i in valid_indices]
+            valid_texts = [cand_sem_texts[i][:24000] for i in valid_indices]
             all_embs = model.encode([jd_sem_text] + valid_texts, convert_to_numpy=True, show_progress_bar=False)
             jd_emb = np.atleast_2d(all_embs[0])
             cand_embs = np.atleast_2d(all_embs[1:])
@@ -428,7 +459,7 @@ def rank(
             corpus = [jd_sem_text] + [cand_sem_texts[i] for i in valid_indices]
             mat = None
             try:
-                vec = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
+                vec = TfidfVectorizer(stop_words="english", ngram_range=(1, TFIDF_MAX_NGRAM))
                 mat = vec.fit_transform(corpus)
             except ValueError:
                 try:
@@ -484,11 +515,18 @@ def rank(
                     is_duplicate=pr.is_duplicate,
                     duplicate_of=pr.duplicate_of,
                     text_hash=pr.text_hash,
-                    resume_snippet=(pr.cleaned_text or pr.raw_text or "")[:4000],
+                    resume_snippet=(pr.anonymized_text or "")[:4000] if weight_cfg.skill_weight is not None else (pr.cleaned_text or pr.raw_text or "")[:4000],
                 )
             )
             continue
 
+        if weight_cfg.skill_weight is not None:
+            known = {skill.casefold() for skill in pr.skills}
+            explicit = [skill for skill in req_skills_set + pref_skills_set if skill.casefold() not in known and skill.casefold() not in extractor.lookup]
+            pr.skills = sorted(set(pr.skills + [
+                skill for skill in explicit
+                if re.search(r"(?<![\w.+#-])" + re.escape(skill) + r"(?![\w+#-]|\.\w)", c_text, re.IGNORECASE)
+            ]))
         cand_skills_lower = {s.lower(): s for s in pr.skills}
 
         # Match required skills
@@ -558,7 +596,7 @@ def rank(
         sem_score = semantic_scores[i]
         sem_score_rounded = round(sem_score, 4)
 
-        if "experience" in app_components:
+        if job_obj.min_experience_years and "experience" in app_components:
             cand_exp = pr.experience_years or 0.0
             exp_score: Optional[float] = min(1.0, max(0.0, cand_exp / job_obj.min_experience_years))
             exp_score_rounded: Optional[float] = round(exp_score, 4)
@@ -573,32 +611,53 @@ def rank(
                 exp_score_rounded = 1.0
                 below_min = False
 
-        # Composite score calculation using effective weights
-        composite = 0.0
-        if req_score is not None:
-            composite += eff_weights["required"] * req_score
-        if pref_score is not None:
-            composite += eff_weights["preferred"] * pref_score
-        composite += eff_weights["semantic"] * sem_score
-        if exp_score is not None:
-            composite += eff_weights["experience"] * exp_score
+        if weight_cfg.skill_weight is not None:
+            skill_scores = [(score, importance) for score, importance in (
+                (req_score if req_skills_set else None, 0.8),
+                (pref_score if pref_skills_set else None, 0.2),
+            ) if score is not None]
+            skill_score = sum(score * w for score, w in skill_scores) / sum(
+                w for _, w in skill_scores
+            ) if skill_scores else None
+            exp_score = exp_score if pr.experience_years is not None and job_obj.min_experience_years else None
+            below_min = exp_score is not None and exp_score < 1
+            composite = (
+                sem_score * eff_weights["semantic"]
+                + tfidf_scores[i] * eff_weights["keyword"]
+                + (skill_score or 0) * eff_weights["skills"]
+                + (exp_score or 0) * eff_weights["experience"]
+            )
+        else:
+            skill_score = None
+            composite = sum(
+                weight * (score or 0) for weight, score in (
+                    (eff_weights["required"], req_score),
+                    (eff_weights["preferred"], pref_score),
+                    (eff_weights["semantic"], sem_score),
+                    (eff_weights["experience"], exp_score),
+                )
+            )
 
         raw_score = composite * 100.0
-        if below_min:
-            raw_score = raw_score * weight_cfg.experience_penalty
+        if below_min and weight_cfg.skill_weight is None:
+            raw_score *= weight_cfg.experience_penalty
 
         match_score = round(float(np.clip(raw_score, 0.0, 100.0)), 2)
 
         comp = ComponentScores(
-            required_skill_score=req_score_rounded,
-            preferred_skill_score=pref_score_rounded,
+            required_skill_score=req_score_rounded if req_skills_set or weight_cfg.skill_weight is None else None,
+            preferred_skill_score=pref_score_rounded if pref_skills_set or weight_cfg.skill_weight is None else None,
             semantic_score=sem_score_rounded,
-            experience_score=exp_score_rounded,
+            skill_score=round(skill_score, 4) if skill_score is not None else None,
+            experience_score=round(exp_score, 4) if exp_score is not None else None,
             tfidf_baseline_score=tfidf_scores[i],
         )
 
         rankings.append(
             CandidateRanking(
+                candidate_id=str(i + 1),
+                detected_skills=pr.skills,
+                experience_years=pr.experience_years,
                 rank=1,
                 rank_display="1",
                 candidate=pr.filename,
@@ -614,7 +673,7 @@ def rank(
                 is_duplicate=pr.is_duplicate,
                 duplicate_of=pr.duplicate_of,
                 text_hash=pr.text_hash,
-                resume_snippet=(pr.cleaned_text or pr.raw_text or "")[:4000],
+                resume_snippet=(pr.anonymized_text or "")[:4000] if weight_cfg.skill_weight is not None else (pr.cleaned_text or pr.raw_text or "")[:4000],
             )
         )
 
@@ -976,6 +1035,29 @@ def get_score_composition_chart_data(
     """Formats weighted contributions into stacked chart data records for applicable components."""
     if weights is None:
         weights = WeightConfig()
+
+    if weights.skill_weight is not None:
+        records = []
+        for candidate in rankings:
+            scores = candidate.component_scores
+            factors = {
+                "Semantic": (scores.semantic_score, weights.semantic_weight),
+                "Keyword": (scores.tfidf_baseline_score, weights.keyword_weight),
+                "Skills": (scores.skill_score, weights.skill_weight),
+                "Experience": (scores.experience_score, weights.experience_weight),
+            }
+            points = {label: round((score or 0) * weight * 100, 2) for label, (score, weight) in factors.items()}
+            largest = max(points, key=points.__getitem__)
+            points[largest] = round(points[largest] + candidate.match_score - sum(points.values()), 2)
+            records.extend({
+                "candidate": candidate.candidate,
+                "component": label,
+                "contribution": value,
+                "percentage_label": f"{value:.2f}",
+                "below_min_experience": candidate.below_min_experience,
+                "penalty_note": "",
+            } for label, value in points.items())
+        return records
 
     records: list[dict[str, Any]] = []
     for r in rankings:

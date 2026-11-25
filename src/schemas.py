@@ -39,6 +39,7 @@ class ParsedResume(BaseModel):
 
     filename: str
     raw_text: str
+    source_filename: str | None = None
     cleaned_text: str = ""
     sections: ResumeSections = Field(default_factory=ResumeSections)
     skills: list[str] = Field(default_factory=list)
@@ -56,6 +57,8 @@ class WeightConfig(BaseModel):
     preferred_skill_weight: float = Field(default=0.2, ge=0.0, le=1.0)
     semantic_weight: float = Field(default=0.2, ge=0.0, le=1.0)
     experience_weight: float = Field(default=0.1, ge=0.0, le=1.0)
+    skill_weight: float | None = Field(default=None, ge=0, le=1)
+    keyword_weight: float = Field(default=0.2, ge=0, le=1)
     experience_penalty: float = Field(default=0.6, ge=0.0, le=1.0)
     renormalize_weights: bool = Field(default=True)
 
@@ -67,6 +70,7 @@ class ComponentScores(BaseModel):
     preferred_skill_score: Optional[float] = None
     semantic_score: float = 0.0
     experience_score: Optional[float] = None
+    skill_score: float | None = None
     tfidf_baseline_score: Optional[float] = None
 
 
@@ -74,6 +78,11 @@ class CandidateRanking(BaseModel):
     """Evaluated ranking output for a candidate against a job description."""
 
     rank: int
+    candidate_id: str = ""
+    resume_filename: str | None = None
+    candidate_name: str | None = None
+    detected_skills: list[str] = Field(default_factory=list)
+    experience_years: float | None = None
     rank_display: str = ""
     candidate: str
     match_score: float
