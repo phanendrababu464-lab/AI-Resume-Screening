@@ -5,6 +5,16 @@
 @tailwind utilities;
 
 @layer base {
+  ::selection {
+    background: #6366f1;
+    color: white;
+  }
+
+  .dark ::selection {
+    background: var(--color-accent);
+    color: var(--text-on-accent);
+  }
+
   :root {
     --accent: var(--color-accent, #6366f1);
     --accent-hover: var(--color-accent-hover, #4f46e5);
@@ -37,9 +47,9 @@
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: rgba(75, 85, 99, 0.5);
+  background: var(--color-accent-secondary);
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(75, 85, 99, 0.7);
+  background: var(--color-accent-hover);
 }

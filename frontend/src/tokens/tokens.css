@@ -47,31 +47,6 @@
   --chart-grid: #e2e8f0;
 }
 
-.dark,
-.dark[data-preset="studio"],
-[data-preset="studio"].dark {
-  --bg-app: #020617;
-  --bg-card: #0f172a;
-  --bg-card-subtle: #1e293b;
-  --border-color: #1e293b;
-  --border-hover: #334155;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-
-  --color-accent: #818cf8;
-  --color-accent-hover: #6366f1;
-  --color-accent-subtle: rgba(99, 102, 241, 0.15);
-  --color-accent-text: #c7d2fe;
-
-  --chart-required: #818cf8;
-  --chart-preferred: #c084fc;
-  --chart-semantic: #34d399;
-  --chart-experience: #fbbf24;
-  --chart-text: #cbd5e1;
-  --chart-grid: #1e293b;
-}
-
 /* --------------------------------------------------------------------------
    2. MINIMAL PRESET (Calm, Print-like, Hairline Borders, Zero Shadows)
    -------------------------------------------------------------------------- */
@@ -113,30 +88,6 @@
   --chart-experience: #a1a1aa;
   --chart-text: #52525b;
   --chart-grid: #e4e4e7;
-}
-
-.dark[data-preset="minimal"],
-[data-preset="minimal"].dark {
-  --bg-app: #09090b;
-  --bg-card: #121214;
-  --bg-card-subtle: #18181b;
-  --border-color: #27272a;
-  --border-hover: #52525b;
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-
-  --color-accent: #fafafa;
-  --color-accent-hover: #e4e4e7;
-  --color-accent-subtle: rgba(250, 250, 250, 0.1);
-  --color-accent-text: #fafafa;
-
-  --chart-required: #fafafa;
-  --chart-preferred: #d4d4d8;
-  --chart-semantic: #a1a1aa;
-  --chart-experience: #52525b;
-  --chart-text: #d4d4d8;
-  --chart-grid: #27272a;
 }
 
 /* --------------------------------------------------------------------------
@@ -182,28 +133,31 @@
   --chart-grid: #cbd5e1;
 }
 
-.dark[data-preset="dashboard"],
-[data-preset="dashboard"].dark {
-  --bg-app: #080c14;
-  --bg-card: #0f172a;
-  --bg-card-subtle: #1e293b;
-  --border-color: #334155;
-  --border-hover: #475569;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+/* Midnight Bronze applies across all dark presets. */
+:root.dark {
+  color-scheme: dark;
+  --bg-app: #101010;
+  --bg-card: #222222;
+  --bg-card-subtle: #33302C;
+  --border-color: #33302C;
+  --border-hover: #E8BD85;
+  --text-primary: #F5E9DA;
+  --text-secondary: #A89C8D;
+  --text-muted: #A89C8D;
 
-  --color-accent: #38bdf8;
-  --color-accent-hover: #0ea5e9;
-  --color-accent-subtle: rgba(56, 189, 248, 0.15);
-  --color-accent-text: #7dd3fc;
+  --color-accent: #D6A76C;
+  --color-accent-hover: #E8BD85;
+  --color-accent-secondary: #795534;
+  --color-accent-subtle: color-mix(in srgb, var(--color-accent-secondary) 25%, var(--bg-card));
+  --color-accent-text: var(--color-accent);
+  --text-on-accent: var(--bg-app);
 
-  --chart-required: #38bdf8;
-  --chart-preferred: #2dd4bf;
-  --chart-semantic: #a78bfa;
-  --chart-experience: #fb923c;
-  --chart-text: #cbd5e1;
-  --chart-grid: #1e293b;
+  --chart-required: var(--color-accent);
+  --chart-preferred: var(--text-muted);
+  --chart-semantic: var(--text-primary);
+  --chart-experience: var(--color-accent-secondary);
+  --chart-text: var(--text-muted);
+  --chart-grid: var(--border-color);
 }
 
 /* --------------------------------------------------------------------------
@@ -242,38 +196,21 @@ body {
   box-shadow: none !important;
 }
 
-[data-preset="minimal"] .border-slate-200,
-[data-preset="minimal"] .border-slate-100 {
-  border-color: var(--border-color) !important;
-}
-
-[data-preset="minimal"].dark .border-slate-800,
-[data-preset="minimal"].dark .border-slate-700 {
+[data-preset="minimal"]:not(.dark) .border-slate-200,
+[data-preset="minimal"]:not(.dark) .border-slate-100 {
   border-color: var(--border-color) !important;
 }
 
 /* Minimal: calm primary button styling */
-[data-preset="minimal"] .bg-accent-600 {
+[data-preset="minimal"]:not(.dark) .bg-accent-600 {
   background-color: var(--color-accent) !important;
   color: #ffffff !important;
 }
-[data-preset="minimal"].dark .bg-accent-600 {
-  background-color: var(--color-accent) !important;
-  color: #09090b !important;
-}
-[data-preset="minimal"] .text-accent-600,
-[data-preset="minimal"] .text-accent-700 {
+[data-preset="minimal"]:not(.dark) .text-accent-600,
+[data-preset="minimal"]:not(.dark) .text-accent-700 {
   color: var(--color-accent-text) !important;
 }
-[data-preset="minimal"].dark .text-accent-400,
-[data-preset="minimal"].dark .text-accent-300 {
-  color: var(--color-accent-text) !important;
-}
-[data-preset="minimal"] .bg-accent-50 {
-  background-color: var(--color-accent-subtle) !important;
-}
-[data-preset="minimal"].dark .bg-accent-950\/60,
-[data-preset="minimal"].dark .bg-accent-950\/80 {
+[data-preset="minimal"]:not(.dark) .bg-accent-50 {
   background-color: var(--color-accent-subtle) !important;
 }
 
@@ -306,15 +243,12 @@ body {
 }
 
 /* Dashboard accent adjustments */
-[data-preset="dashboard"] .bg-accent-600 {
+[data-preset="dashboard"]:not(.dark) .bg-accent-600 {
   background-color: var(--color-accent) !important;
 }
-[data-preset="dashboard"] .bg-accent-500 {
+[data-preset="dashboard"]:not(.dark) .bg-accent-500 {
   background-color: var(--color-accent) !important;
 }
-[data-preset="dashboard"] .text-accent-600 {
-  color: var(--color-accent) !important;
-}
-[data-preset="dashboard"].dark .text-accent-400 {
+[data-preset="dashboard"]:not(.dark) .text-accent-600 {
   color: var(--color-accent) !important;
 }

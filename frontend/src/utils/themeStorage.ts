@@ -3,11 +3,11 @@ import type { Theme, Preset } from '../tokens/presets.ts';
 export const THEME_STORAGE_KEY = 'theme';
 export const PRESET_STORAGE_KEY = 'style-preset';
 
+export const DEFAULT_THEME: Theme = 'dark';
 export const DEFAULT_PRESET: Preset = 'studio';
 
 /**
- * Safely loads the saved theme from localStorage, falling back to
- * prefers-color-scheme, or 'light' if storage is disabled or unavailable.
+ * Safely loads the saved theme from localStorage, defaulting to Midnight Bronze.
  */
 export function loadSavedTheme(): Theme {
   try {
@@ -22,18 +22,7 @@ export function loadSavedTheme(): Theme {
     console.warn('localStorage is not accessible, using fallback for theme:', err);
   }
 
-  // Fallback to system prefers-color-scheme
-  try {
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        return 'dark';
-      }
-    }
-  } catch {
-    // matchMedia not available
-  }
-
-  return 'light';
+  return DEFAULT_THEME;
 }
 
 /**

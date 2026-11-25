@@ -34,18 +34,18 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ rankings, jobTitle, 
     <button
       onClick={handleExport}
       disabled={isExporting}
-      className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition disabled:opacity-50 cursor-pointer"
+      className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-midnight-border text-slate-700 dark:text-midnight-ink border border-slate-200 dark:border-midnight-border hover:bg-slate-50 dark:hover:bg-midnight-tint shadow-sm transition disabled:opacity-50 cursor-pointer"
       title="Export rankings and score breakdown to CSV spreadsheet"
       aria-label="Export results to CSV"
     >
       {isExporting ? (
         <>
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-accent-500" />
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-accent-500 dark:text-midnight-primary" />
           <span>Generating CSV...</span>
         </>
       ) : (
         <>
-          <Download className="w-3.5 h-3.5 text-accent-500" />
+          <Download className="w-3.5 h-3.5 text-accent-500 dark:text-midnight-primary" />
           <span>Export Results (CSV)</span>
         </>
       )}

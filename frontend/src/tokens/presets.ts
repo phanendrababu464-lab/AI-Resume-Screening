@@ -38,6 +38,15 @@ export const PRESETS: Record<Preset, PresetMeta> = {
   },
 };
 
+const MIDNIGHT_BRONZE_CHART: ChartPalette = {
+  required: 'var(--chart-required)',
+  preferred: 'var(--chart-preferred)',
+  semantic: 'var(--chart-semantic)',
+  experience: 'var(--chart-experience)',
+  text: 'var(--chart-text)',
+  grid: 'var(--chart-grid)',
+};
+
 export const CHART_PALETTES: Record<Preset, Record<Theme, ChartPalette>> = {
   studio: {
     light: {
@@ -48,14 +57,7 @@ export const CHART_PALETTES: Record<Preset, Record<Theme, ChartPalette>> = {
       text: '#475569', // Slate 600
       grid: '#e2e8f0', // Slate 200
     },
-    dark: {
-      required: '#818cf8', // Indigo 400
-      preferred: '#c084fc', // Purple 400
-      semantic: '#34d399', // Emerald 400
-      experience: '#fbbf24', // Amber 400
-      text: '#cbd5e1', // Slate 300
-      grid: '#334155', // Slate 700
-    },
+    dark: MIDNIGHT_BRONZE_CHART,
   },
   minimal: {
     light: {
@@ -66,14 +68,7 @@ export const CHART_PALETTES: Record<Preset, Record<Theme, ChartPalette>> = {
       text: '#52525b', // Zinc 600
       grid: '#e4e4e7', // Zinc 200 hairline
     },
-    dark: {
-      required: '#fafafa', // Zinc 50 (Crisp white ink)
-      preferred: '#d4d4d8', // Zinc 300
-      semantic: '#a1a1aa', // Zinc 400
-      experience: '#52525b', // Zinc 600
-      text: '#d4d4d8', // Zinc 300
-      grid: '#27272a', // Zinc 800 hairline
-    },
+    dark: MIDNIGHT_BRONZE_CHART,
   },
   dashboard: {
     light: {
@@ -84,13 +79,6 @@ export const CHART_PALETTES: Record<Preset, Record<Theme, ChartPalette>> = {
       text: '#334155', // Slate 700
       grid: '#cbd5e1', // Slate 300
     },
-    dark: {
-      required: '#38bdf8', // Sky 400 (High-tech cyan)
-      preferred: '#2dd4bf', // Teal 400
-      semantic: '#a78bfa', // Violet 400
-      experience: '#fb923c', // Orange 400
-      text: '#cbd5e1', // Slate 300
-      grid: '#1e293b', // Slate 800
-    },
+    dark: MIDNIGHT_BRONZE_CHART,
   },
 };

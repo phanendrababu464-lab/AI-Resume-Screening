@@ -1,3 +1,5 @@
+const token = (name) => `color-mix(in srgb, var(--${name}) calc(<alpha-value> * 100%), transparent)`;
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -11,6 +13,18 @@ export default {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
       colors: {
+        midnight: {
+          canvas: token('bg-app'),
+          surface: token('bg-card'),
+          border: token('border-color'),
+          ink: token('text-primary'),
+          muted: token('text-muted'),
+          primary: token('color-accent'),
+          secondary: token('color-accent-secondary'),
+          hover: token('color-accent-hover'),
+          tint: token('color-accent-subtle'),
+          'on-accent': token('text-on-accent'),
+        },
         accent: {
           50: '#eef2ff',
           100: '#e0e7ff',

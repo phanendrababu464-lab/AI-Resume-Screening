@@ -4,6 +4,8 @@ test('screens real PDF and DOCX resumes, compares candidates and exports results
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
+  await expect(page.locator('.landing')).toHaveCSS('background-color', 'rgb(16, 16, 16)');
+  await expect(page.locator('.preview')).toHaveCSS('background-color', 'rgb(34, 34, 34)');
   await page.getByRole('button', { name: 'Review', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Review before deciding' }).first()).toBeVisible();
   await page.getByRole('link', { name: 'Start screening' }).first().click();
@@ -41,12 +43,16 @@ test('screens real PDF and DOCX resumes, compares candidates and exports results
   await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Score distribution' })).toBeVisible();
   await expect(page.getByRole('img', { name: /0–19:/ })).toBeVisible();
+  await expect(page.locator('.recharts-bar-rectangle path').first()).toHaveCSS('fill', 'rgb(214, 167, 108)');
   expect(errors).toEqual([]);
 });
 
 test('mobile navigation, persistent themes, and sample recovery', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/workspace/new');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('.app-shell')).toHaveCSS('background-color', 'rgb(16, 16, 16)');
   await expect(page.getByRole('button', { name: 'Screen and rank' })).toBeDisabled();
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('link', { name: 'Settings', exact: true }).click();
@@ -57,7 +63,9 @@ test('mobile navigation, persistent themes, and sample recovery', async ({ page 
   await page.getByRole('button', { name: 'Studio', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-preset', 'studio');
   await page.getByRole('button', { name: 'Light', exact: true }).click();
-  await expect(page.locator('html')).not.toHaveClass(/dark/);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.reload();
+  await expect(page.locator('.app-shell')).toHaveCSS('background-color', 'rgb(247, 248, 252)');
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('link', { name: 'New screening', exact: true }).click();
   await page.getByRole('button', { name: 'Use sample batch' }).click();

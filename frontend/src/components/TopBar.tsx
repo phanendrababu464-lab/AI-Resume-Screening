@@ -66,18 +66,18 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenExplainer }) => {
   ];
 
   return (
-    <header className="relative z-40 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors">
+    <header className="relative z-40 border-b border-slate-200 dark:border-midnight-border bg-white dark:bg-midnight-surface transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand */}
         <div className="flex items-center space-x-3 shrink-0">
-          <div className="w-10 h-10 rounded-xl bg-accent-600 text-white flex items-center justify-center shadow-md shadow-accent-500/20">
+          <div className="w-10 h-10 rounded-xl bg-accent-600 dark:bg-midnight-primary text-white dark:text-midnight-on-accent flex items-center justify-center shadow-md shadow-accent-500/20 dark:shadow-midnight-primary/20">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-50 tracking-tight leading-none">
+            <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-midnight-ink tracking-tight leading-none">
               AI Resume Screening
             </h1>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 hidden sm:block">
+            <p className="text-[11px] text-slate-500 dark:text-midnight-muted mt-1 hidden sm:block">
               Deterministic NLP & Semantic Evaluation
             </p>
           </div>
@@ -87,7 +87,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenExplainer }) => {
         <div className="flex items-center space-x-2 sm:space-x-3">
           {/* Style Presets Switcher */}
           <div
-            className="flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+            className="flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-midnight-border border border-slate-200 dark:border-midnight-border"
             role="radiogroup"
             aria-label="Visual style presets"
           >
@@ -102,10 +102,10 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenExplainer }) => {
                   role="radio"
                   aria-checked={isSelected}
                   title={opt.desc}
-                  className={`flex items-center space-x-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium rounded-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
+                  className={`flex items-center space-x-1.5 px-2 sm:px-2.5 py-1 text-xs font-medium rounded-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:focus-visible:ring-midnight-primary ${
                     isSelected
-                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-sm font-semibold'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                      ? 'bg-white dark:bg-midnight-surface text-slate-900 dark:text-midnight-ink shadow-sm font-semibold'
+                      : 'text-slate-600 dark:text-midnight-muted hover:text-slate-900 dark:hover:text-midnight-hover'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -119,27 +119,27 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenExplainer }) => {
           <div
             className={`hidden lg:inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
               isApiHealthy === true
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-midnight-tint/40 dark:text-midnight-ink dark:border-midnight-border'
                 : isApiHealthy === false
-                ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800'
-                : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-midnight-secondary/40 dark:text-midnight-hover dark:border-midnight-secondary'
+                : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-midnight-border dark:text-midnight-muted dark:border-midnight-border'
             }`}
             title={isApiHealthy ? 'Backend API is online and responding' : 'Backend API is unreachable on :8000'}
             aria-label="API status indicator"
           >
             {isApiHealthy === true ? (
               <>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-midnight-ink animate-pulse" />
                 <span>API Online</span>
               </>
             ) : isApiHealthy === false ? (
               <>
-                <span className="w-2 h-2 rounded-full bg-rose-500" />
+                <span className="w-2 h-2 rounded-full bg-rose-500 dark:bg-midnight-hover" />
                 <span>API Offline</span>
               </>
             ) : (
               <>
-                <span className="w-2 h-2 rounded-full bg-slate-400" />
+                <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-midnight-muted" />
                 <span>Checking API...</span>
               </>
             )}
@@ -148,24 +148,24 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenExplainer }) => {
           {/* How Scoring Works button */}
           <button
             onClick={onOpenExplainer}
-            className="hidden sm:inline-flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+            className="hidden sm:inline-flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium rounded-lg text-slate-700 dark:text-midnight-muted hover:bg-slate-100 dark:hover:bg-midnight-tint border border-slate-200 dark:border-midnight-border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:focus-visible:ring-midnight-primary"
             aria-label="Open scoring formula explainer"
           >
-            <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
+            <HelpCircle className="w-3.5 h-3.5 text-slate-400 dark:text-midnight-muted" />
             <span className="hidden sm:inline">How Scoring Works</span>
           </button>
 
           {/* Theme Toggle Button (Separate from Preset Switcher) */}
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+            className="p-2 rounded-lg text-slate-600 dark:text-midnight-muted hover:bg-slate-100 dark:hover:bg-midnight-tint border border-slate-200 dark:border-midnight-border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:focus-visible:ring-midnight-primary"
             title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
             aria-label="Toggle theme"
           >
             {theme === 'dark' ? (
-              <Sun className="w-4 h-4 text-amber-400" />
+              <Sun className="w-4 h-4 text-amber-400 dark:text-midnight-hover" />
             ) : (
-              <Moon className="w-4 h-4 text-slate-600" />
+              <Moon className="w-4 h-4 text-slate-600 dark:text-midnight-muted" />
             )}
           </button>
         </div>

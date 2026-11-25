@@ -166,14 +166,14 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
       {/* ---------------------------------------------------- */}
       {/* CARD 1: Job Description */}
       {/* ---------------------------------------------------- */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-card transition-colors flex flex-col justify-between">
+      <div className="bg-white dark:bg-midnight-surface border border-slate-200 dark:border-midnight-border rounded-2xl p-5 shadow-card transition-colors flex flex-col justify-between">
         <div>
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/80 mb-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-midnight-border/80 mb-4">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-lg bg-accent-50 text-accent-600 dark:bg-accent-950/60 dark:text-accent-400 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-accent-50 text-accent-600 dark:bg-midnight-tint/60 dark:text-midnight-primary flex items-center justify-center">
                 <Briefcase className="w-4 h-4" />
               </div>
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-midnight-ink uppercase tracking-wider">
                 1. Target Job Description
               </h2>
             </div>
@@ -181,14 +181,14 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
             {/* Sample Job Dropdown */}
             {sampleJobs.length > 0 && (
               <div className="flex items-center space-x-1.5">
-                <label htmlFor="sample-job-select" className="text-xs text-slate-500 dark:text-slate-400 sr-only">
+                <label htmlFor="sample-job-select" className="text-xs text-slate-500 dark:text-midnight-muted sr-only">
                   Select sample job
                 </label>
                 <select
                   id="sample-job-select"
                   onChange={handleSelectSampleJob}
                   defaultValue=""
-                  className="text-xs font-medium bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-500 cursor-pointer"
+                  className="text-xs font-medium bg-slate-50 dark:bg-midnight-border text-slate-700 dark:text-midnight-ink border border-slate-200 dark:border-midnight-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-500 dark:focus:ring-midnight-primary cursor-pointer"
                   aria-label="Use sample job dropdown"
                 >
                   <option value="" disabled>
@@ -212,22 +212,22 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
               onChange={(e) => onJobTextChange(e.target.value)}
               placeholder="Paste the target job description here (e.g. Job Title, Requirements, Experience, Preferred qualifications)..."
               rows={8}
-              className="w-full text-sm font-mono bg-slate-50/50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-accent-500 transition resize-y"
+              className="w-full text-sm font-mono bg-slate-50/50 dark:bg-midnight-canvas/50 border border-slate-200 dark:border-midnight-border rounded-xl p-3.5 text-slate-800 dark:text-midnight-ink placeholder:text-slate-400 dark:placeholder:text-midnight-muted focus:outline-none focus:ring-2 focus:ring-accent-500 dark:focus:ring-midnight-primary transition resize-y"
               aria-label="Job description text"
             />
           </div>
         </div>
 
         {/* Live Preview Section */}
-        <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800/80">
+        <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-midnight-border/80">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center space-x-1">
-              <Sparkles className="w-3.5 h-3.5 text-accent-500" />
+            <span className="text-xs font-semibold text-slate-500 dark:text-midnight-muted flex items-center space-x-1">
+              <Sparkles className="w-3.5 h-3.5 text-accent-500 dark:text-midnight-primary" />
               <span>Live Extracted Requirements</span>
             </span>
             {isAnalyzingJob && (
-              <span className="text-xs text-slate-400 flex items-center space-x-1">
-                <Loader2 className="w-3 h-3 animate-spin text-accent-500" />
+              <span className="text-xs text-slate-400 dark:text-midnight-muted flex items-center space-x-1">
+                <Loader2 className="w-3 h-3 animate-spin text-accent-500 dark:text-midnight-primary" />
                 <span>Parsing...</span>
               </span>
             )}
@@ -235,11 +235,11 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
 
           {/* Multi-Job Detection Warning */}
           {jobAnalysis?.has_multiple_jobs && (
-            <div className="mb-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/80 text-amber-900 dark:text-amber-200 text-xs flex items-start space-x-2.5">
-              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="mb-3 p-3 rounded-xl bg-amber-50 dark:bg-midnight-secondary/50 border border-amber-200 dark:border-midnight-secondary/80 text-amber-900 dark:text-midnight-hover text-xs flex items-start space-x-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-midnight-hover shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold block">Multiple Job Postings Detected</span>
-                <p className="mt-0.5 text-amber-800 dark:text-amber-300">
+                <p className="mt-0.5 text-amber-800 dark:text-midnight-hover">
                   {jobAnalysis.multiple_jobs_warning || 'This text appears to contain multiple job roles or postings. Requirements across sections were extracted, but for the most accurate screening results, evaluate one job at a time.'}
                 </p>
               </div>
@@ -250,10 +250,10 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
             <div className="space-y-2.5 text-xs">
               {/* Min Experience */}
               {jobAnalysis.min_experience_years !== null && jobAnalysis.min_experience_years !== undefined && (
-                <div className="flex items-center space-x-1.5 text-slate-700 dark:text-slate-300">
-                  <Clock className="w-3.5 h-3.5 text-amber-500" />
+                <div className="flex items-center space-x-1.5 text-slate-700 dark:text-midnight-muted">
+                  <Clock className="w-3.5 h-3.5 text-amber-500 dark:text-midnight-hover" />
                   <span className="font-semibold">Experience Gate:</span>
-                  <span className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded font-mono font-medium">
+                  <span className="bg-amber-100 dark:bg-midnight-secondary/60 text-amber-800 dark:text-midnight-hover px-2 py-0.5 rounded font-mono font-medium">
                     {jobAnalysis.min_experience_years}+ years minimum
                   </span>
                 </div>
@@ -262,14 +262,14 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
               {/* Required Skills Chips */}
               {jobAnalysis.required_skills.length > 0 && (
                 <div>
-                  <span className="text-slate-500 dark:text-slate-400 block mb-1 font-medium">
+                  <span className="text-slate-500 dark:text-midnight-muted block mb-1 font-medium">
                     Required Skills ({jobAnalysis.required_skills.length}):
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {jobAnalysis.required_skills.map((s) => (
                       <span
                         key={s}
-                        className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent-50 text-accent-700 border border-accent-200 dark:bg-accent-950/60 dark:text-accent-300 dark:border-accent-800 text-xs font-medium"
+                        className="inline-flex items-center px-2 py-0.5 rounded-md bg-accent-50 text-accent-700 border border-accent-200 dark:bg-midnight-tint/60 dark:text-midnight-primary dark:border-midnight-secondary text-xs font-medium"
                       >
                         {s}
                       </span>
@@ -281,14 +281,14 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
               {/* Preferred Skills Chips */}
               {jobAnalysis.preferred_skills.length > 0 && (
                 <div>
-                  <span className="text-slate-500 dark:text-slate-400 block mb-1 font-medium">
+                  <span className="text-slate-500 dark:text-midnight-muted block mb-1 font-medium">
                     Preferred Skills ({jobAnalysis.preferred_skills.length}):
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {jobAnalysis.preferred_skills.map((s) => (
                       <span
                         key={s}
-                        className="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800 text-xs font-medium"
+                        className="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 dark:bg-midnight-tint/60 dark:text-midnight-muted dark:border-midnight-border text-xs font-medium"
                       >
                         {s}
                       </span>
@@ -298,7 +298,7 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
               )}
             </div>
           ) : (
-            <div className="text-xs text-slate-400 dark:text-slate-500 italic py-1">
+            <div className="text-xs text-slate-400 dark:text-midnight-muted italic py-1">
               Type or select a job description above to preview extracted skill taxonomy and minimum experience gate.
             </div>
           )}
@@ -308,14 +308,14 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
       {/* ---------------------------------------------------- */}
       {/* CARD 2: Candidate Resumes */}
       {/* ---------------------------------------------------- */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-card transition-colors flex flex-col justify-between">
+      <div className="bg-white dark:bg-midnight-surface border border-slate-200 dark:border-midnight-border rounded-2xl p-5 shadow-card transition-colors flex flex-col justify-between">
         <div>
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/80 mb-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-midnight-border/80 mb-4">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-midnight-tint/60 dark:text-midnight-ink flex items-center justify-center">
                 <FileText className="w-4 h-4" />
               </div>
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-midnight-ink uppercase tracking-wider">
                 2. Candidate Resumes
               </h2>
             </div>
@@ -324,7 +324,7 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
             <button
               onClick={handleUseSampleResumes}
               disabled={isLoadingSamples}
-              className="inline-flex items-center space-x-1.5 text-xs font-medium bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 transition disabled:opacity-50"
+              className="inline-flex items-center space-x-1.5 text-xs font-medium bg-slate-50 dark:bg-midnight-border text-slate-700 dark:text-midnight-ink border border-slate-200 dark:border-midnight-border rounded-lg px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-midnight-tint transition disabled:opacity-50"
               aria-label="Load synthetic test resumes"
             >
               {isLoadingSamples ? (
@@ -334,7 +334,7 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
                 </>
               ) : (
                 <>
-                  <FileUp className="w-3.5 h-3.5 text-accent-500" />
+                  <FileUp className="w-3.5 h-3.5 text-accent-500 dark:text-midnight-primary" />
                   <span>Use Sample Resumes</span>
                 </>
               )}
@@ -349,8 +349,8 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
             onClick={() => fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition ${
               isDragging
-                ? 'border-accent-500 bg-accent-50/50 dark:bg-accent-950/30'
-                : 'border-slate-200 dark:border-slate-800 hover:border-accent-400 dark:hover:border-accent-600 bg-slate-50/40 dark:bg-slate-950/30'
+                ? 'border-accent-500 dark:border-midnight-primary bg-accent-50/50 dark:bg-midnight-tint/30'
+                : 'border-slate-200 dark:border-midnight-border hover:border-accent-400 dark:hover:border-midnight-hover bg-slate-50/40 dark:bg-midnight-canvas/30'
             }`}
             role="button"
             tabIndex={0}
@@ -375,28 +375,28 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
               className="hidden"
               aria-label="File upload input"
             />
-            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 mx-auto flex items-center justify-center mb-2">
-              <UploadCloud className="w-5 h-5 text-accent-500" />
+            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-midnight-border text-slate-600 dark:text-midnight-muted mx-auto flex items-center justify-center mb-2">
+              <UploadCloud className="w-5 h-5 text-accent-500 dark:text-midnight-primary" />
             </div>
-            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-              Drag & drop resumes here, or <span className="text-accent-600 dark:text-accent-400 underline">browse</span>
+            <p className="text-xs font-semibold text-slate-700 dark:text-midnight-ink">
+              Drag & drop resumes here, or <span className="text-accent-600 dark:text-midnight-primary underline">browse</span>
             </p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+            <p className="text-[11px] text-slate-400 dark:text-midnight-muted mt-1">
               Supports PDF and DOCX files up to 5 MB (max {MAX_RESUMES} candidates per batch)
             </p>
           </div>
         </div>
 
         {/* Selected File Chips */}
-        <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800/80">
+        <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-midnight-border/80">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+            <span className="text-xs font-semibold text-slate-600 dark:text-midnight-muted">
               Selected Resumes ({files.length} / {MAX_RESUMES})
             </span>
             {files.length > 0 && (
               <button
                 onClick={() => onFilesChange([])}
-                className="text-[11px] text-rose-500 hover:text-rose-600 dark:text-rose-400 font-medium transition"
+                className="text-[11px] text-rose-500 hover:text-rose-600 dark:hover:text-midnight-hover dark:text-midnight-hover font-medium transition"
               >
                 Clear all
               </button>
@@ -408,19 +408,19 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
               {files.map((file, idx) => (
                 <div
                   key={`${file.name}-${idx}`}
-                  className="inline-flex items-center space-x-2 bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg text-xs"
+                  className="inline-flex items-center space-x-2 bg-slate-100 dark:bg-midnight-border/80 text-slate-800 dark:text-midnight-ink border border-slate-200 dark:border-midnight-border px-2.5 py-1 rounded-lg text-xs"
                 >
-                  <FileText className="w-3.5 h-3.5 text-accent-500 flex-shrink-0" />
+                  <FileText className="w-3.5 h-3.5 text-accent-500 dark:text-midnight-primary flex-shrink-0" />
                   <span className="font-medium truncate max-w-[140px]" title={file.name}>
                     {file.name}
                   </span>
-                  <span className="text-[10px] text-slate-400">({formatBytes(file.size)})</span>
+                  <span className="text-[10px] text-slate-400 dark:text-midnight-muted">({formatBytes(file.size)})</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleRemoveFile(idx);
                     }}
-                    className="text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 transition ml-1"
+                    className="text-slate-400 dark:text-midnight-muted hover:text-rose-500 dark:hover:text-midnight-hover transition ml-1"
                     title={`Remove ${file.name}`}
                     aria-label={`Remove ${file.name}`}
                   >
@@ -430,8 +430,8 @@ export const SetupSection: React.FC<SetupSectionProps> = ({
               ))}
             </div>
           ) : (
-            <div className="flex items-center space-x-1.5 text-xs text-slate-400 dark:text-slate-500 italic py-2">
-              <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
+            <div className="flex items-center space-x-1.5 text-xs text-slate-400 dark:text-midnight-muted italic py-2">
+              <AlertCircle className="w-3.5 h-3.5 text-slate-400 dark:text-midnight-muted" />
               <span>No resumes selected. Upload files or click "Use Sample Resumes".</span>
             </div>
           )}

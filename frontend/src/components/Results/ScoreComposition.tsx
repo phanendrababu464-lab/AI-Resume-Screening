@@ -24,10 +24,12 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
   rankings,
   nonApplicableComponents = [],
 }) => {
-  const { chartPalette } = useTheme();
+  const { chartPalette, theme } = useTheme();
+  const barLabelColor = theme === 'dark' ? 'var(--text-on-accent)' : '#ffffff';
+  const experienceLabelColor = theme === 'dark' ? 'var(--text-primary)' : '#ffffff';
 
   // Custom label renderer showing percentage on stacked bars when width >= 28px
-  const renderBarLabel = (props: { x?: number; y?: number; width?: number; height?: number; value?: number }): React.ReactElement<SVGElement> => {
+  const renderBarLabel = (fill: string) => (props: { x?: number; y?: number; width?: number; height?: number; value?: number }): React.ReactElement<SVGElement> => {
     const { x = 0, y = 0, width, height = 0, value } = props;
     if (!value || typeof width !== 'number' || width < 28) {
       return <g />;
@@ -36,12 +38,12 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
       <text
         x={x + width / 2}
         y={y + height / 2}
-        fill="#ffffff"
+        fill={fill}
         textAnchor="middle"
         dominantBaseline="central"
         fontSize={10}
         fontWeight={700}
-        style={{ pointerEvents: 'none', textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}
+        style={{ pointerEvents: 'none', textShadow: theme === 'light' ? '0 1px 2px rgba(0,0,0,0.6)' : undefined }}
       >
         {Math.round(value)}%
       </text>
@@ -101,18 +103,18 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
   return (
     <div
       id="results-composition"
-      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-card transition-colors"
+      className="bg-white dark:bg-midnight-surface border border-slate-200 dark:border-midnight-border rounded-2xl p-6 shadow-card transition-colors"
     >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800/80 mb-5 gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 dark:border-midnight-border/80 mb-5 gap-2">
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-lg bg-accent-50 text-accent-600 dark:bg-accent-950/60 dark:text-accent-400 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-accent-50 text-accent-600 dark:bg-midnight-tint/60 dark:text-midnight-primary flex items-center justify-center">
             <Layers className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-midnight-ink uppercase tracking-wider">
               Score Composition & Weighted Contribution
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-midnight-muted">
               Stacked points sum exactly to candidate's composite match score
             </p>
           </div>
@@ -143,7 +145,7 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
               tickFormatter={(val) => (val.length > 14 ? `${val.slice(0, 12)}…` : val)}
             />
             <Tooltip
-              cursor={{ fill: 'rgba(128, 128, 128, 0.08)' }}
+              cursor={{ fill: theme === 'dark' ? 'var(--color-accent-subtle)' : 'rgba(128, 128, 128, 0.08)' }}
               content={({ active, payload, label }) => {
                 if (active && payload && payload.length) {
                   const data = payload[0].payload;
@@ -152,11 +154,11 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
                   const isExpNA = nonApplicableComponents.includes('experience');
 
                   return (
-                    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl shadow-xl text-xs space-y-1.5 z-50">
-                      <p className="font-bold text-slate-900 dark:text-slate-100 border-b border-slate-100 dark:border-slate-700 pb-1">
+                    <div className="bg-white dark:bg-midnight-border border border-slate-200 dark:border-midnight-border p-3.5 rounded-xl shadow-xl text-xs space-y-1.5 z-50">
+                      <p className="font-bold text-slate-900 dark:text-midnight-ink border-b border-slate-100 dark:border-midnight-border pb-1">
                         {label}
                       </p>
-                      <div className="space-y-1 text-slate-600 dark:text-slate-300">
+                      <div className="space-y-1 text-slate-600 dark:text-midnight-muted">
                         <div className="flex justify-between gap-4">
                           <span className="flex items-center gap-1.5">
                             <span
@@ -206,14 +208,14 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
                           </span>
                         </div>
                       </div>
-                      <div className="pt-1.5 border-t border-slate-100 dark:border-slate-700 flex justify-between font-bold text-slate-900 dark:text-slate-100">
+                      <div className="pt-1.5 border-t border-slate-100 dark:border-midnight-border flex justify-between font-bold text-slate-900 dark:text-midnight-ink">
                         <span>Total Score:</span>
-                        <span className="font-mono text-accent-600 dark:text-accent-400">
+                        <span className="font-mono text-accent-600 dark:text-midnight-primary">
                           {formatPercent(data.composite, 1)}
                         </span>
                       </div>
                       {data.belowMinExp && (
-                        <div className="text-[11px] text-amber-600 dark:text-amber-400 font-medium pt-1">
+                        <div className="text-[11px] text-amber-600 dark:text-midnight-hover font-medium pt-1">
                           ⚠️ Below minimum experience{data.penaltyNote}
                         </div>
                       )}
@@ -226,7 +228,7 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
             <Legend
               wrapperStyle={{ paddingTop: 10 }}
               formatter={(value) => (
-                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                <span className="text-xs font-medium text-slate-700 dark:text-midnight-muted">
                   {value}
                 </span>
               )}
@@ -237,7 +239,7 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
               stackId="a"
               fill={chartPalette.required}
               radius={[0, 0, 0, 0]}
-              label={renderBarLabel}
+              label={renderBarLabel(barLabelColor)}
             />
             <Bar
               dataKey="preferred"
@@ -245,7 +247,7 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
               stackId="a"
               fill={chartPalette.preferred}
               radius={[0, 0, 0, 0]}
-              label={renderBarLabel}
+              label={renderBarLabel(barLabelColor)}
             />
             <Bar
               dataKey="semantic"
@@ -253,7 +255,7 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
               stackId="a"
               fill={chartPalette.semantic}
               radius={[0, 0, 0, 0]}
-              label={renderBarLabel}
+              label={renderBarLabel(barLabelColor)}
             />
             <Bar
               dataKey="experience"
@@ -261,7 +263,7 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
               stackId="a"
               fill={chartPalette.experience}
               radius={[0, 4, 4, 0]}
-              label={renderBarLabel}
+              label={renderBarLabel(experienceLabelColor)}
             />
           </BarChart>
         </ResponsiveContainer>
@@ -269,8 +271,8 @@ export const ScoreComposition: React.FC<ScoreCompositionProps> = ({
 
       {/* Minimum Experience Penalty Note */}
       {penalizedCandidates.length > 0 && (
-        <div className="mt-4 p-3 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 rounded-xl flex items-start space-x-2 text-xs text-amber-800 dark:text-amber-300">
-          <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+        <div className="mt-4 p-3 bg-amber-50/60 dark:bg-midnight-secondary/20 border border-amber-200/80 dark:border-midnight-secondary/40 rounded-xl flex items-start space-x-2 text-xs text-amber-800 dark:text-midnight-hover">
+          <AlertTriangle className="w-4 h-4 text-amber-500 dark:text-midnight-hover flex-shrink-0 mt-0.5" />
           <div>
             <span className="font-bold">Minimum-Experience Penalty Applied: </span>
             {penalizedCandidates.map((c) => (
