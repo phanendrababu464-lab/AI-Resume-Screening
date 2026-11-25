@@ -7,7 +7,7 @@ import os
 import httpx
 from pydantic import BaseModel, Field
 
-from src.anonymizer import anonymize_text
+from src.anonymizer import anonymize_text, redact_protected_attributes
 from src.services.gemini_service import get_gemini_api_key
 
 logger = logging.getLogger(__name__)
@@ -44,9 +44,9 @@ def generate_insights(job: str, excerpt: str, matched: list[str], missing: list[
     if not key:
         return InsightsResponse(status="unconfigured", message="Gemini insights are unavailable on this server.")
     model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-    text = anonymize_text(excerpt)
+    text = anonymize_text(redact_protected_attributes(excerpt))
     data = json.dumps({
-        "job_description": anonymize_text(job),
+        "job_description": anonymize_text(redact_protected_attributes(job)),
         "resume_excerpt": text,
         "matched_skills": matched,
         "missing_skill_evidence": missing,

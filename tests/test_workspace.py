@@ -209,3 +209,25 @@ def test_api_import_leaves_heavy_models_for_background_startup():
         capture_output=True, text=True, timeout=20,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_protected_fields_are_removed_before_modern_relevance_scoring():
+    from src.schemas import WeightConfig
+    from src.services.screening_service import rank
+
+    base = "Built FastAPI services in Python and maintained PostgreSQL."
+    resumes = [
+        {"name": "first", "text": "Gender: Male\nAge: 28\nReligion: Hindu\n" + base},
+        {"name": "second", "text": "Gender: Female\nAge: 51\nReligion: Jewish\n" + base},
+    ]
+    ranks = rank("Build FastAPI services with Python and PostgreSQL.", resumes,
+                 WeightConfig(semantic_weight=.4, skill_weight=.3))
+    assert ranks[0].match_score == ranks[1].match_score
+
+
+def test_protected_terms_cannot_be_explicit_skill_criteria(sample_docx_stream):
+    result = client.post("/api/screen", data={"job_text": "Engineer", "required_skills": "Python, Gender"}, files={
+        "files": ("resume.docx", sample_docx_stream.read(), "application/octet-stream"),
+    })
+    assert result.status_code == 422
+    assert "technical skills" in result.json()["detail"]

@@ -17,7 +17,7 @@ from typing import Any, BinaryIO, Optional, TYPE_CHECKING, Union
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
-from src.anonymizer import anonymize_text
+from src.anonymizer import anonymize_text, redact_protected_attributes
 from src.config import (
     DEFAULT_DEVICE,
     DEFAULT_EXPERIENCE_PENALTY,
@@ -149,12 +149,13 @@ def analyze_job(text: str) -> JobAnalysis:
             multiple_jobs_warning=None,
         )
 
-    parsed = parse_job_description(text)
-    cleaned = clean_text(text)
+    relevance_text = redact_protected_attributes(text)
+    parsed = parse_job_description(relevance_text)
+    cleaned = clean_text(relevance_text)
 
     # Extract job title if present
     job_title = None
-    for line in text.splitlines():
+    for line in relevance_text.splitlines():
         line_clean = line.strip()
         if line_clean.lower().startswith("job title:"):
             job_title = line_clean.split(":", 1)[1].strip()
@@ -423,7 +424,10 @@ def rank(
 
     if weight_cfg.skill_weight is not None:
         for pr in parsed_resumes:
-            pr.experience_years = extract_evidenced_experience(pr.sections.experience or pr.raw_text)
+            pr.anonymized_text = redact_protected_attributes(pr.anonymized_text or pr.raw_text)
+            pr.skills = extractor.extract_skills(pr.anonymized_text)
+            experience = redact_protected_attributes(pr.sections.experience or pr.raw_text)
+            pr.experience_years = extract_evidenced_experience(experience)
 
     import numpy as np
     from sklearn.feature_extraction.text import TfidfVectorizer
@@ -431,8 +435,13 @@ def rank(
 
     # 4. Text preparation for semantic similarity & TF-IDF
     jd_sem_text = job_obj.cleaned_text if job_obj.cleaned_text.strip() else job_obj.raw_text
+    if weight_cfg.skill_weight is not None:
+        jd_sem_text = redact_protected_attributes(jd_sem_text)
     cand_sem_texts: list[str] = []
     for pr in parsed_resumes:
+        if weight_cfg.skill_weight is not None:
+            cand_sem_texts.append((pr.anonymized_text or "").strip())
+            continue
         t = (
             pr.anonymized_text.strip()
             if pr.anonymized_text and pr.anonymized_text.strip()
@@ -491,7 +500,8 @@ def rank(
         if not c_text:
             # Empty candidate text -> exact 0.0 across all applicable components
             below_min = (
-                "experience" in app_components
+                weight_cfg.skill_weight is None
+                and "experience" in app_components
                 and job_obj.min_experience_years is not None
                 and job_obj.min_experience_years > 0.0
             )
@@ -504,6 +514,7 @@ def rank(
             )
             rankings.append(
                 CandidateRanking(
+                    candidate_id=str(i + 1),
                     rank=1,
                     rank_display="1",
                     candidate=pr.filename,
@@ -524,13 +535,6 @@ def rank(
             )
             continue
 
-        if weight_cfg.skill_weight is not None:
-            known = {skill.casefold() for skill in pr.skills}
-            explicit = [skill for skill in req_skills_set + pref_skills_set if skill.casefold() not in known and skill.casefold() not in extractor.lookup]
-            pr.skills = sorted(set(pr.skills + [
-                skill for skill in explicit
-                if re.search(r"(?<![\w.+#-])" + re.escape(skill) + r"(?![\w+#-]|\.\w)", c_text, re.IGNORECASE)
-            ]))
         cand_skills_lower = {s.lower(): s for s in pr.skills}
 
         # Match required skills

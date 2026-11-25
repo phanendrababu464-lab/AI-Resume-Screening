@@ -10,7 +10,7 @@ The audit found a single-page dashboard, an API that blocked startup while warmi
 
 - The Vite frontend serves a landing page and a routed React workspace. Candidate data and the active shortlist live in memory in the current tab. Completed session summaries power dashboard activity during that tab's lifetime. Only theme and layout preferences are persisted in browser storage.
 - FastAPI owns multipart validation, scoring contracts, and export. A single-worker executor imports and warms the model libraries and handles PDF or DOCX extraction, job analysis and CPU inference. Model encoding uses batches of four to cap peak memory. Request admission caps concurrent uploads and keeps at most one running and one queued ML task. A timed-out HTTP request keeps its worker slot until the computation finishes.
-- The service loads the pinned MiniLM revision and the spaCy `en_core_web_sm` tokenizer for taxonomy phrase matching. Role overrides accept canonical or aliased technical skills, plus explicit terms matched on token boundaries.
+- The service loads the pinned MiniLM revision and the spaCy `en_core_web_sm` tokenizer for taxonomy phrase matching. Role overrides accept canonical or aliased technical skills from the taxonomy. Known protected-attribute fields and explicit age statements are removed from modern relevance inputs.
 - Gemini is a separate optional request. Provider work has two concurrent slots, a per-process quota, and bounded timeouts and retries. Gemini output never feeds the ranking formula.
 
 ## Score methodology

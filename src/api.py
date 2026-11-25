@@ -282,8 +282,11 @@ def _run_screening_sync(
         extractor = get_skill_extractor()
         for field, value in overrides.items():
             if field.endswith("_skills"):
-                skills = [extractor.extract_skills(word) or [word.strip()] for word in value.split(",") if word.strip()]
-                value = list(dict.fromkeys(skill for group in skills for skill in group))
+                configured = [word.strip() for word in value.split(",") if word.strip()]
+                skills = [extractor.lookup.get(word.casefold()) for word in configured]
+                if any(skill is None for skill in skills):
+                    raise ValueError("Use technical skills from the supported taxonomy in the criteria fields.")
+                value = list(dict.fromkeys(skills))
             setattr(job_analysis, field, value)
         required = {skill.casefold() for skill in job_analysis.required_skills}
         job_analysis.preferred_skills = [skill for skill in job_analysis.preferred_skills if skill.casefold() not in required]

@@ -293,6 +293,19 @@ def _detect_names_from_text(text: str, candidate_name: Optional[str] = None) -> 
     return list(dict.fromkeys(names))
 
 
+_PROTECTED_HEADER = re.compile(
+    r"(?im)^[ \t]*(?:age|date of birth|birth date|dob|gender|sex|pronouns?|"
+    r"racial identity|race|ethnicity|religion|faith|disability|marital status|"
+    r"sexual orientation|nationality|genetic information)[ \t]*[:=][^\r\n]*"
+)
+_AGE_IN_PROSE = re.compile(r"(?i)\b(?:aged[ \t]+[0-9]{1,3}|[0-9]{1,3}(?:[ \t-]+)years?(?:[ \t-]+)old)\b")
+
+
+def redact_protected_attributes(text: str) -> str:
+    """Remove explicit protected-attribute fields and age statements before relevance analysis."""
+    return _AGE_IN_PROSE.sub("", _PROTECTED_HEADER.sub("", text))
+
+
 def anonymize_text(text: str, candidate_name: Optional[str] = None) -> str:
     """Redacts candidate names, emails, phone numbers, and gendered pronouns from text.
 
