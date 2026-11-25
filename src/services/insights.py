@@ -59,17 +59,20 @@ def generate_insights(job: str, excerpt: str, matched: list[str], missing: list[
             timeout=9000,
             retry_options=types.HttpRetryOptions(attempts=2, initial_delay=1, max_delay=2, http_status_codes=[500, 502, 503, 504]),
         )) as client:
-            response = client.models.generate_content(
+            response = client.interactions.create(
                 model=model,
-                contents=data,
-                config=types.GenerateContentConfig(
-                    system_instruction=INSTRUCTION,
-                    response_mime_type="application/json",
-                    response_json_schema=InsightsAnalysis.model_json_schema(),
-                    max_output_tokens=2600,
-                ),
+                input=data,
+                system_instruction=INSTRUCTION,
+                store=False,
+                response_format={
+                    "type": "text",
+                    "mime_type": "application/json",
+                    "schema": InsightsAnalysis.model_json_schema(),
+                },
+                generation_config={"max_output_tokens": 2600},
+                timeout=10,
             )
-        result = InsightsAnalysis.model_validate_json(response.text or "")
+        result = InsightsAnalysis.model_validate_json(response.output_text or "")
         result.supporting_quotes = list(dict.fromkeys(
             quote for quote in result.supporting_quotes if 12 <= len(quote) <= 450 and quote in text
         ))

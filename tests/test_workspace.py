@@ -137,8 +137,8 @@ def test_gemini_structured_output_filters_fabricated_evidence(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "synthetic-test-key")
     resume = "Maintained Python API services with FastAPI."
     mock = MagicMock()
-    generate = mock.__enter__.return_value.models.generate_content
-    generate.return_value.text = json.dumps({
+    generate = mock.__enter__.return_value.interactions.create
+    generate.return_value.output_text = json.dumps({
         "summary": "FastAPI experience is relevant to the role.",
         "strengths": ["FastAPI"], "experience_observations": [], "missing_qualifications": [],
         "areas_to_verify": [], "interview_questions": ["How did you version the API?"],
@@ -148,7 +148,9 @@ def test_gemini_structured_output_filters_fabricated_evidence(monkeypatch):
     result = generate_insights("Find a Python engineer", resume, ["Python"], [])
     assert result.status == "success"
     assert result.analysis.supporting_quotes == [resume]
-    assert "untrusted" in generate.call_args.kwargs["config"].system_instruction
+    assert "untrusted" in generate.call_args.kwargs["system_instruction"]
+    assert generate.call_args.kwargs["store"] is False
+    assert generate.call_args.kwargs["response_format"]["mime_type"] == "application/json"
     generate.side_effect = httpx.ReadTimeout("test")
     assert generate_insights("Role", resume, [], []).status == "timeout"
 
@@ -192,7 +194,7 @@ def test_insights_reports_provider_availability(monkeypatch, code, status):
 
     monkeypatch.setenv("GEMINI_API_KEY", "synthetic-test-key")
     mock = MagicMock()
-    mock.__enter__.return_value.models.generate_content.side_effect = ClientError(
+    mock.__enter__.return_value.interactions.create.side_effect = ClientError(
         code, {"error": {"code": code, "message": "provider error"}}
     )
     monkeypatch.setattr("google.genai.Client", lambda **kwargs: mock)
