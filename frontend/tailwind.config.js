@@ -13,30 +13,19 @@ export default {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
       colors: {
-        midnight: {
+        theme: {
           canvas: token('bg-app'),
           surface: token('bg-card'),
+          subtle: token('bg-card-subtle'),
           border: token('border-color'),
           ink: token('text-primary'),
           muted: token('text-muted'),
+          'secondary-text': token('text-secondary'),
           primary: token('color-accent'),
           secondary: token('color-accent-secondary'),
           hover: token('color-accent-hover'),
           tint: token('color-accent-subtle'),
           'on-accent': token('text-on-accent'),
-        },
-        accent: {
-          50: '#eef2ff',
-          100: '#e0e7ff',
-          200: '#c7d2fe',
-          300: '#a5b4fc',
-          400: '#818cf8',
-          500: '#6366f1',
-          600: '#4f46e5',
-          700: '#4338ca',
-          800: '#3730a3',
-          900: '#312e81',
-          950: '#1e1b4b',
         },
       },
       borderRadius: {

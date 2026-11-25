@@ -85,13 +85,13 @@ describe('themeStorage utils', () => {
       expect(loadSavedTheme()).toBe('light');
     });
 
-    it('defaults to dark when localStorage is empty', () => {
-      expect(loadSavedTheme()).toBe('dark');
+    it('defaults to light when localStorage is empty', () => {
+      expect(loadSavedTheme()).toBe('light');
     });
 
-    it('defaults to dark even when the system prefers light', () => {
-      (window as unknown as { matchMedia: unknown }).matchMedia = vi.fn().mockReturnValue({ matches: false });
-      expect(loadSavedTheme()).toBe('dark');
+    it('defaults to light even when the system prefers dark', () => {
+      (window as unknown as { matchMedia: unknown }).matchMedia = vi.fn().mockReturnValue({ matches: true });
+      expect(loadSavedTheme()).toBe('light');
     });
 
     it('gracefully handles localStorage being disabled / throwing SecurityError', () => {
@@ -100,7 +100,7 @@ describe('themeStorage utils', () => {
       });
 
       expect(() => loadSavedTheme()).not.toThrow();
-      expect(loadSavedTheme()).toBe('dark');
+      expect(loadSavedTheme()).toBe('light');
     });
   });
 

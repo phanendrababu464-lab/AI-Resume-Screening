@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { Theme, Preset, ChartPalette } from '../tokens/presets.ts';
-import { CHART_PALETTES } from '../tokens/presets.ts';
+import { CHART_PALETTE } from '../tokens/presets.ts';
 import {
   loadSavedTheme,
   saveTheme,
@@ -25,26 +25,24 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [theme, setThemeState] = useState<Theme>(loadSavedTheme);
   const [preset, setPresetState] = useState<Preset>(loadSavedPreset);
 
-  // Sync to DOM and localStorage whenever theme or preset changes
+  // Keep the default separate from explicitly saved theme choices.
   useEffect(() => {
     applyThemeAndPresetToDOM(theme, preset);
-    saveTheme(theme);
     savePreset(preset);
   }, [theme, preset]);
 
-  const toggleTheme = () => {
-    setThemeState((prev) => (prev === 'light' ? 'dark' : 'light'));
-  };
-
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
+    saveTheme(newTheme);
+  };
+
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
   };
 
   const setPreset = (newPreset: Preset) => {
     setPresetState(newPreset);
   };
-
-  const chartPalette = CHART_PALETTES[preset][theme];
 
   return (
     <ThemeContext.Provider
@@ -54,7 +52,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         toggleTheme,
         setTheme,
         setPreset,
-        chartPalette,
+        chartPalette: CHART_PALETTE,
       }}
     >
       {children}

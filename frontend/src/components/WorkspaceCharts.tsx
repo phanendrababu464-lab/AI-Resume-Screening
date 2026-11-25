@@ -30,7 +30,7 @@ export function ComparisonChart({ candidates }: ComparisonResult) {
         <CartesianGrid vertical={false} stroke="var(--line)" />
         <XAxis dataKey="label" hide />
         <YAxis domain={[0, 100]} tick={{ fill: 'var(--muted)', fontSize: 12 }} />
-        <Tooltip cursor={{ fill: 'var(--chart-comparison-cursor)' }} contentStyle={chartTooltipStyle} />
+        <Tooltip cursor={{ fill: 'var(--tone)' }} contentStyle={chartTooltipStyle} />
         <Bar dataKey="match" name="Overall match" fill="var(--accent)" radius={[6, 6, 0, 0]} maxBarSize={65} />
       </BarChart>
     </ResponsiveContainer>

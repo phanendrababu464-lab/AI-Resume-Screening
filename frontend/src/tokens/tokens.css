@@ -22,29 +22,6 @@
   --space-card-p: 1.5rem;
   --space-table-py: 0.75rem;
   --space-table-px: 0.875rem;
-
-  /* Colors (Light) */
-  --bg-app: #f8fafc;
-  --bg-card: #ffffff;
-  --bg-card-subtle: #f1f5f9;
-  --border-color: #e2e8f0;
-  --border-hover: #cbd5e1;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-
-  --color-accent: #6366f1;
-  --color-accent-hover: #4f46e5;
-  --color-accent-subtle: #eef2ff;
-  --color-accent-text: #4338ca;
-
-  /* Chart palette (Light) */
-  --chart-required: #6366f1;
-  --chart-preferred: #a855f7;
-  --chart-semantic: #10b981;
-  --chart-experience: #f59e0b;
-  --chart-text: #475569;
-  --chart-grid: #e2e8f0;
 }
 
 /* --------------------------------------------------------------------------
@@ -65,33 +42,10 @@
   --space-card-p: 1.75rem;
   --space-table-py: 0.85rem;
   --space-table-px: 1rem;
-
-  /* Colors (Light) */
-  --bg-app: #fafafa;
-  --bg-card: #ffffff;
-  --bg-card-subtle: #f4f4f5;
-  --border-color: #e4e4e7;
-  --border-hover: #a1a1aa;
-  --text-primary: #18181b;
-  --text-secondary: #52525b;
-  --text-muted: #71717a;
-
-  --color-accent: #18181b;
-  --color-accent-hover: #27272a;
-  --color-accent-subtle: #f4f4f5;
-  --color-accent-text: #18181b;
-
-  /* Chart palette (Light - Tonal monochrome with high contrast) */
-  --chart-required: #18181b;
-  --chart-preferred: #52525b;
-  --chart-semantic: #71717a;
-  --chart-experience: #a1a1aa;
-  --chart-text: #52525b;
-  --chart-grid: #e4e4e7;
 }
 
 /* --------------------------------------------------------------------------
-   3. DASHBOARD PRESET (Data-Dense, Technical, Compact, Rich Categorical)
+   3. DASHBOARD PRESET (Data-Dense, Technical, Compact)
    -------------------------------------------------------------------------- */
 [data-preset="dashboard"] {
   --preset-id: "dashboard";
@@ -108,29 +62,34 @@
   --space-card-p: 1.15rem;
   --space-table-py: 0.4rem;
   --space-table-px: 0.65rem;
+}
 
-  /* Colors (Light) */
-  --bg-app: #f1f5f9;
-  --bg-card: #ffffff;
-  --bg-card-subtle: #f8fafc;
-  --border-color: #cbd5e1;
-  --border-hover: #94a3b8;
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
+/* The light palette applies across all layout presets. */
+:root {
+  color-scheme: light;
+  --bg-app: #FAF5E9;
+  --bg-card: #E2CBA7;
+  --bg-card-subtle: color-mix(in srgb, var(--bg-card) 45%, var(--bg-app));
+  --border-color: #D8C6B4;
+  --border-hover: #591D30;
+  --text-primary: #321923;
+  --text-muted: #8C746B;
+  /* Small secondary text needs more contrast on tan surfaces. */
+  --text-secondary: color-mix(in srgb, var(--text-muted) 55%, var(--text-primary));
 
-  --color-accent: #0284c7;
-  --color-accent-hover: #0369a1;
-  --color-accent-subtle: #e0f2fe;
-  --color-accent-text: #0369a1;
+  --color-accent: #782D42;
+  --color-accent-hover: var(--border-hover);
+  --color-accent-secondary: #B89A68;
+  --color-accent-subtle: color-mix(in srgb, var(--color-accent-secondary) 24%, var(--bg-app));
+  --color-accent-text: var(--color-accent);
+  --text-on-accent: var(--bg-app);
 
-  /* Chart palette (Light - Rich categorical accessible palette) */
-  --chart-required: #2563eb;
-  --chart-preferred: #0d9488;
-  --chart-semantic: #7c3aed;
-  --chart-experience: #ea580c;
-  --chart-text: #334155;
-  --chart-grid: #cbd5e1;
+  --chart-required: var(--color-accent);
+  --chart-preferred: var(--text-secondary);
+  --chart-semantic: var(--text-primary);
+  --chart-experience: var(--color-accent-secondary);
+  --chart-text: var(--text-secondary);
+  --chart-grid: var(--border-color);
 }
 
 /* Midnight Bronze applies across all dark presets. */
@@ -196,24 +155,6 @@ body {
   box-shadow: none !important;
 }
 
-[data-preset="minimal"]:not(.dark) .border-slate-200,
-[data-preset="minimal"]:not(.dark) .border-slate-100 {
-  border-color: var(--border-color) !important;
-}
-
-/* Minimal: calm primary button styling */
-[data-preset="minimal"]:not(.dark) .bg-accent-600 {
-  background-color: var(--color-accent) !important;
-  color: #ffffff !important;
-}
-[data-preset="minimal"]:not(.dark) .text-accent-600,
-[data-preset="minimal"]:not(.dark) .text-accent-700 {
-  color: var(--color-accent-text) !important;
-}
-[data-preset="minimal"]:not(.dark) .bg-accent-50 {
-  background-color: var(--color-accent-subtle) !important;
-}
-
 /* DASHBOARD SPECIFIC OVERRIDES */
 [data-preset="dashboard"] .rounded-2xl {
   border-radius: var(--radius-card) !important;
@@ -240,15 +181,4 @@ body {
   padding-bottom: 0.35rem !important;
   padding-left: 0.5rem !important;
   padding-right: 0.5rem !important;
-}
-
-/* Dashboard accent adjustments */
-[data-preset="dashboard"]:not(.dark) .bg-accent-600 {
-  background-color: var(--color-accent) !important;
-}
-[data-preset="dashboard"]:not(.dark) .bg-accent-500 {
-  background-color: var(--color-accent) !important;
-}
-[data-preset="dashboard"]:not(.dark) .text-accent-600 {
-  color: var(--color-accent) !important;
 }

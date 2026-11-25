@@ -31,8 +31,8 @@ export const KpiTiles: React.FC<KpiTilesProps> = ({ results }) => {
       value: formatPercent(bestScore, 1),
       subtitle: topCandidate ? topCandidate.candidate : 'N/A',
       icon: Trophy,
-      colorClass: 'text-sky-600 dark:text-midnight-primary',
-      bgClass: 'bg-sky-50 dark:bg-midnight-tint/50 border-sky-200 dark:border-midnight-border',
+      colorClass: 'text-theme-primary',
+      bgClass: 'bg-theme-tint/50 border-theme-border',
     },
     {
       id: 'screened_count',
@@ -40,8 +40,8 @@ export const KpiTiles: React.FC<KpiTilesProps> = ({ results }) => {
       value: `${total_candidates}`,
       subtitle: `${total_candidates} parsed & evaluated`,
       icon: Users,
-      colorClass: 'text-indigo-600 dark:text-midnight-primary',
-      bgClass: 'bg-indigo-50 dark:bg-midnight-tint/50 border-indigo-200 dark:border-midnight-border',
+      colorClass: 'text-theme-primary',
+      bgClass: 'bg-theme-tint/50 border-theme-border',
     },
     {
       id: 'shortfalls',
@@ -49,11 +49,11 @@ export const KpiTiles: React.FC<KpiTilesProps> = ({ results }) => {
       value: `${shortfalls}`,
       subtitle: shortfalls === 0 ? 'All meet criteria' : `${shortfalls} gap${shortfalls > 1 ? 's' : ''} detected`,
       icon: AlertTriangle,
-      colorClass: shortfalls > 0 ? 'text-amber-600 dark:text-midnight-hover' : 'text-emerald-600 dark:text-midnight-ink',
+      colorClass: shortfalls > 0 ? 'text-theme-hover' : 'text-theme-ink',
       bgClass:
         shortfalls > 0
-          ? 'bg-amber-50 dark:bg-midnight-secondary/50 border-amber-200 dark:border-midnight-secondary'
-          : 'bg-emerald-50 dark:bg-midnight-tint/50 border-emerald-200 dark:border-midnight-border',
+          ? 'bg-theme-secondary/50 border-theme-secondary'
+          : 'bg-theme-tint/50 border-theme-border',
     },
     {
       id: 'average_score',
@@ -61,8 +61,8 @@ export const KpiTiles: React.FC<KpiTilesProps> = ({ results }) => {
       value: formatPercent(averageScore, 1),
       subtitle: `Across ${rankings.length} evaluated resumes`,
       icon: TrendingUp,
-      colorClass: 'text-emerald-600 dark:text-midnight-ink',
-      bgClass: 'bg-emerald-50 dark:bg-midnight-tint/50 border-emerald-200 dark:border-midnight-border',
+      colorClass: 'text-theme-ink',
+      bgClass: 'bg-theme-tint/50 border-theme-border',
     },
   ];
 
@@ -78,10 +78,10 @@ export const KpiTiles: React.FC<KpiTilesProps> = ({ results }) => {
         return (
           <div
             key={kpi.id}
-            className="p-4 rounded-xl border border-slate-200 dark:border-midnight-border bg-white dark:bg-midnight-surface shadow-sm flex flex-col justify-between transition-colors"
+            className="p-4 rounded-xl border border-theme-border bg-theme-surface shadow-sm flex flex-col justify-between transition-colors"
           >
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-midnight-muted uppercase tracking-wider truncate">
+              <span className="text-[11px] font-semibold text-theme-secondary-text uppercase tracking-wider truncate">
                 {kpi.label}
               </span>
               <div className={`w-7 h-7 rounded-lg border ${kpi.bgClass} flex items-center justify-center shrink-0`}>
@@ -89,10 +89,10 @@ export const KpiTiles: React.FC<KpiTilesProps> = ({ results }) => {
               </div>
             </div>
             <div>
-              <div className="text-xl sm:text-2xl font-black font-mono text-slate-900 dark:text-midnight-ink tracking-tight">
+              <div className="text-xl sm:text-2xl font-black font-mono text-theme-ink tracking-tight">
                 {kpi.value}
               </div>
-              <div className="text-xs text-slate-500 dark:text-midnight-muted truncate mt-0.5" title={kpi.subtitle}>
+              <div className="text-xs text-theme-secondary-text truncate mt-0.5" title={kpi.subtitle}>
                 {kpi.subtitle}
               </div>
             </div>

@@ -1,18 +1,18 @@
 <!doctype html>
-<html lang="en" class="dark" data-theme="dark">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HireLens AI</title>
     <script>
-      // Apply a saved light choice before the first paint.
+      // Apply a saved dark choice before the first paint.
       try {
-        if (localStorage.getItem('theme') === 'light') {
-          document.documentElement.classList.remove('dark');
-          document.documentElement.dataset.theme = 'light';
+        if (localStorage.getItem('theme') === 'dark') {
+          document.documentElement.classList.add('dark');
+          document.documentElement.dataset.theme = 'dark';
         }
       } catch {
-        // Midnight Bronze is the default when storage is unavailable.
+        // Light mode is the default when storage is unavailable.
       }
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">

@@ -18,7 +18,7 @@ export const SkillMatchMatrix: React.FC<SkillMatchMatrixProps> = ({
 }) => {
   if (!matrixData || matrixData.length === 0 || (!job.required_skills?.length && !job.preferred_skills?.length)) {
     return (
-      <div className="bg-white dark:bg-midnight-surface border border-slate-200 dark:border-midnight-border rounded-2xl p-6 text-center text-xs text-slate-500 dark:text-midnight-muted">
+      <div className="bg-theme-surface border border-theme-border rounded-2xl p-6 text-center text-xs text-theme-secondary-text">
         No specific required or preferred skills extracted to display in the matrix.
       </div>
     );
@@ -44,18 +44,18 @@ export const SkillMatchMatrix: React.FC<SkillMatchMatrixProps> = ({
   const totalMissing = matrixData.filter((m) => m.status === 'Missing').length;
 
   return (
-    <div className="bg-white dark:bg-midnight-surface border border-slate-200 dark:border-midnight-border rounded-2xl p-6 shadow-card transition-colors">
+    <div className="bg-theme-surface border border-theme-border rounded-2xl p-6 shadow-card transition-colors">
       {/* Header & Legend */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 dark:border-midnight-border/80 mb-4 gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-theme-border/80 mb-4 gap-3">
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-lg bg-accent-50 text-accent-600 dark:bg-midnight-tint/60 dark:text-midnight-primary flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-theme-tint/60 text-theme-primary flex items-center justify-center">
             <Target className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-midnight-ink uppercase tracking-wider">
+            <h3 className="text-sm font-bold text-theme-ink uppercase tracking-wider">
               Skill Match Matrix
             </h3>
-            <p className="text-xs text-slate-500 dark:text-midnight-muted">
+            <p className="text-xs text-theme-secondary-text">
               Candidate skills matched against job taxonomy requirements
             </p>
           </div>
@@ -64,45 +64,45 @@ export const SkillMatchMatrix: React.FC<SkillMatchMatrixProps> = ({
         {/* Compact Legend */}
         <div className="flex flex-wrap items-center gap-4 text-xs">
           <span className="inline-flex items-center space-x-1.5">
-            <span className="w-5 h-5 rounded bg-emerald-100 border border-emerald-500 text-emerald-800 dark:bg-midnight-tint dark:border-midnight-ink dark:text-midnight-ink flex items-center justify-center font-bold text-xs">
+            <span className="w-5 h-5 rounded border bg-theme-tint border-theme-ink text-theme-ink flex items-center justify-center font-bold text-xs">
               ✓
             </span>
-            <span className="text-slate-600 dark:text-midnight-muted font-medium">Exact Match (1.0)</span>
+            <span className="text-theme-secondary-text font-medium">Exact Match (1.0)</span>
           </span>
 
           <span className="inline-flex items-center space-x-1.5">
-            <span className="w-5 h-5 rounded bg-amber-100 border border-amber-500 text-amber-800 dark:bg-midnight-secondary/40 dark:border-midnight-hover dark:text-midnight-hover flex items-center justify-center font-bold text-xs">
+            <span className="w-5 h-5 rounded border bg-theme-secondary/40 border-theme-hover text-theme-hover flex items-center justify-center font-bold text-xs">
               ≈
             </span>
-            <span className="text-slate-600 dark:text-midnight-muted font-medium">Related Match (Partial)</span>
+            <span className="text-theme-secondary-text font-medium">Related Match (Partial)</span>
           </span>
 
           <span className="inline-flex items-center space-x-1.5">
-            <span className="w-5 h-5 rounded bg-rose-100 border border-rose-500 text-rose-800 dark:bg-midnight-secondary/40 dark:border-midnight-hover dark:text-midnight-hover flex items-center justify-center font-bold text-xs">
+            <span className="w-5 h-5 rounded border bg-theme-secondary/40 border-theme-hover text-theme-hover flex items-center justify-center font-bold text-xs">
               ✗
             </span>
-            <span className="text-slate-600 dark:text-midnight-muted font-medium">Missing (0.0)</span>
+            <span className="text-theme-secondary-text font-medium">Missing (0.0)</span>
           </span>
         </div>
       </div>
 
       {/* Responsive Horizontal Scroll Wrapper */}
-      <div className="w-full overflow-x-auto rounded-xl border border-slate-200 dark:border-midnight-border bg-white dark:bg-midnight-surface shadow-sm">
+      <div className="w-full overflow-x-auto rounded-xl border border-theme-border bg-theme-surface shadow-sm">
         <table className="w-max min-w-full border-collapse text-xs select-none">
           <thead>
             {/* Tier 1: Group Headers */}
-            <tr className="border-b border-slate-200 dark:border-midnight-border">
+            <tr className="border-b border-theme-border">
               <th
                 rowSpan={2}
-                className="sticky left-0 z-20 bg-slate-50 dark:bg-midnight-canvas p-3.5 text-left font-bold text-slate-800 dark:text-midnight-ink border-r-2 border-slate-300 dark:border-midnight-border w-44 min-w-[170px]"
+                className="sticky left-0 z-20 bg-theme-canvas p-3.5 text-left font-bold text-theme-ink border-r-2 border-theme-border w-44 min-w-[170px]"
               >
                 Candidate
               </th>
               {reqSkills.length > 0 && (
                 <th
                   colSpan={reqSkills.length}
-                  className={`bg-accent-50/80 dark:bg-midnight-tint/40 text-accent-700 dark:text-midnight-primary font-bold uppercase tracking-wider py-2 text-center text-[11px] ${
-                    hasPref ? 'border-r-2 border-slate-400 dark:border-midnight-border' : ''
+                  className={`bg-theme-tint/40 text-theme-primary font-bold uppercase tracking-wider py-2 text-center text-[11px] ${
+                    hasPref ? 'border-r-2 border-theme-border' : ''
                   }`}
                 >
                   REQUIRED SKILLS ({reqSkills.length})
@@ -111,29 +111,29 @@ export const SkillMatchMatrix: React.FC<SkillMatchMatrixProps> = ({
               {hasPref && (
                 <th
                   colSpan={prefSkills.length}
-                  className="bg-purple-50/80 dark:bg-midnight-tint/40 text-purple-700 dark:text-midnight-muted font-bold uppercase tracking-wider py-2 text-center text-[11px]"
+                  className="bg-theme-tint/40 text-theme-secondary-text font-bold uppercase tracking-wider py-2 text-center text-[11px]"
                 >
                   PREFERRED SKILLS ({prefSkills.length})
                 </th>
               )}
               <th
                 rowSpan={2}
-                className="bg-slate-50 dark:bg-midnight-canvas p-3 text-center font-bold text-slate-800 dark:text-midnight-ink w-36 min-w-[130px]"
+                className="bg-theme-canvas p-3 text-center font-bold text-theme-ink w-36 min-w-[130px]"
               >
                 Match Summary
               </th>
             </tr>
 
             {/* Tier 2: Skill Names */}
-            <tr className="border-b-2 border-slate-200 dark:border-midnight-border bg-slate-50/50 dark:bg-midnight-canvas/50">
+            <tr className="border-b-2 border-theme-border bg-theme-canvas/50">
               {reqSkills.map((s, idx) => {
                 const isLastReq = idx === reqSkills.length - 1 && hasPref;
                 return (
                   <th
                     key={s}
                     title={s}
-                    className={`p-2 text-center font-semibold text-slate-700 dark:text-midnight-muted w-20 min-w-[70px] max-w-[80px] break-words leading-tight ${
-                      isLastReq ? 'border-r-2 border-slate-400 dark:border-midnight-border' : 'border-r border-slate-200/60 dark:border-midnight-border'
+                    className={`p-2 text-center font-semibold text-theme-secondary-text w-20 min-w-[70px] max-w-[80px] break-words leading-tight ${
+                      isLastReq ? 'border-r-2 border-theme-border' : 'border-r border-theme-border'
                     }`}
                   >
                     <div className="line-clamp-2 text-[11px]">{s}</div>
@@ -144,7 +144,7 @@ export const SkillMatchMatrix: React.FC<SkillMatchMatrixProps> = ({
                 <th
                   key={s}
                   title={s}
-                  className="p-2 text-center font-semibold text-slate-700 dark:text-midnight-muted w-20 min-w-[70px] max-w-[80px] break-words leading-tight border-r border-slate-200/60 dark:border-midnight-border"
+                  className="p-2 text-center font-semibold text-theme-secondary-text w-20 min-w-[70px] max-w-[80px] break-words leading-tight border-r border-theme-border"
                 >
                   <div className="line-clamp-2 text-[11px]">{s}</div>
                 </th>
@@ -152,7 +152,7 @@ export const SkillMatchMatrix: React.FC<SkillMatchMatrixProps> = ({
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-slate-100 dark:divide-midnight-border/80">
+          <tbody className="divide-y divide-theme-border/80">
             {rankings.map((cand) => {
               // Find related match info
               const reqMatchedCount = reqSkills.filter((s) => cand.matched_required_skills.includes(s)).length;
@@ -162,18 +162,18 @@ export const SkillMatchMatrix: React.FC<SkillMatchMatrixProps> = ({
               return (
                 <tr
                   key={cand.candidate}
-                  className="hover:bg-slate-50/70 dark:hover:bg-midnight-tint/40 transition-colors h-[52px]"
+                  className="hover:bg-theme-tint/40 transition-colors h-[52px]"
                 >
                   {/* Sticky Candidate Name */}
                   <td
-                    className="sticky left-0 z-10 bg-white dark:bg-midnight-surface px-3.5 py-2 font-semibold text-slate-900 dark:text-midnight-ink border-r-2 border-slate-300 dark:border-midnight-border truncate max-w-[170px]"
+                    className="sticky left-0 z-10 bg-theme-surface px-3.5 py-2 font-semibold text-theme-ink border-r-2 border-theme-border truncate max-w-[170px]"
                     title={cand.candidate}
                   >
                     <div className="flex items-center space-x-1.5">
-                      <span className="text-[10px] text-slate-400 dark:text-midnight-muted font-mono font-bold">#{cand.rank}</span>
+                      <span className="text-[10px] text-theme-secondary-text font-mono font-bold">#{cand.rank}</span>
                       <button
                         onClick={() => onSelectCandidate && onSelectCandidate(cand.candidate)}
-                        className="truncate text-left hover:text-accent-600 dark:hover:text-midnight-hover transition"
+                        className="truncate text-left hover:text-theme-hover transition"
                       >
                         {cand.candidate}
                       </button>
@@ -195,16 +195,16 @@ export const SkillMatchMatrix: React.FC<SkillMatchMatrixProps> = ({
                       <td
                         key={s}
                         className={`p-1.5 text-center ${
-                          isLastReq ? 'border-r-2 border-slate-400 dark:border-midnight-border' : 'border-r border-slate-100 dark:border-midnight-border'
+                          isLastReq ? 'border-r-2 border-theme-border' : 'border-r border-theme-border'
                         }`}
                       >
                         <div
                           className={`w-11 h-11 mx-auto rounded-lg flex flex-col items-center justify-center font-bold transition shadow-xs ${
                             status === 'Exact Match'
-                              ? 'bg-emerald-100/90 text-emerald-800 border border-emerald-400 dark:bg-midnight-tint/70 dark:border-midnight-ink dark:text-midnight-ink'
+                              ? 'border bg-theme-tint/70 border-theme-ink text-theme-ink'
                               : status === 'Related Match'
-                              ? 'bg-amber-100/90 text-amber-800 border border-amber-400 dark:bg-midnight-secondary/70 dark:border-midnight-hover dark:text-midnight-hover'
-                              : 'bg-rose-100/80 text-rose-800 border border-rose-300 dark:bg-midnight-secondary/60 dark:border-midnight-secondary dark:text-midnight-hover'
+                              ? 'border bg-theme-secondary/70 border-theme-hover text-theme-hover'
+                              : 'border bg-theme-secondary/60 border-theme-secondary text-theme-hover'
                           }`}
                           title={
                             status === 'Related Match' && relParsed
@@ -236,15 +236,15 @@ export const SkillMatchMatrix: React.FC<SkillMatchMatrixProps> = ({
                     return (
                       <td
                         key={s}
-                        className="p-1.5 text-center border-r border-slate-100 dark:border-midnight-border"
+                        className="p-1.5 text-center border-r border-theme-border"
                       >
                         <div
                           className={`w-11 h-11 mx-auto rounded-lg flex flex-col items-center justify-center font-bold transition shadow-xs ${
                             status === 'Exact Match'
-                              ? 'bg-emerald-100/90 text-emerald-800 border border-emerald-400 dark:bg-midnight-tint/70 dark:border-midnight-ink dark:text-midnight-ink'
+                              ? 'border bg-theme-tint/70 border-theme-ink text-theme-ink'
                               : status === 'Related Match'
-                              ? 'bg-amber-100/90 text-amber-800 border border-amber-400 dark:bg-midnight-secondary/70 dark:border-midnight-hover dark:text-midnight-hover'
-                              : 'bg-rose-100/80 text-rose-800 border border-rose-300 dark:bg-midnight-secondary/60 dark:border-midnight-secondary dark:text-midnight-hover'
+                              ? 'border bg-theme-secondary/70 border-theme-hover text-theme-hover'
+                              : 'border bg-theme-secondary/60 border-theme-secondary text-theme-hover'
                           }`}
                           title={
                             status === 'Related Match' && relParsed
@@ -266,12 +266,12 @@ export const SkillMatchMatrix: React.FC<SkillMatchMatrixProps> = ({
                   })}
 
                   {/* Summary Column */}
-                  <td className="p-2.5 text-center bg-slate-50/50 dark:bg-midnight-canvas/30">
-                    <div className="font-bold text-accent-600 dark:text-midnight-primary text-xs">
+                  <td className="p-2.5 text-center bg-theme-canvas/30">
+                    <div className="font-bold text-theme-primary text-xs">
                       {reqMatchedCount}/{reqSkills.length} required ({reqPct}%)
                     </div>
                     {hasPref && (
-                      <div className="text-[11px] font-semibold text-purple-600 dark:text-midnight-muted mt-0.5">
+                      <div className="text-[11px] font-semibold text-theme-secondary-text mt-0.5">
                         {prefMatchedCount}/{prefSkills.length} preferred
                       </div>
                     )}
@@ -284,15 +284,15 @@ export const SkillMatchMatrix: React.FC<SkillMatchMatrixProps> = ({
       </div>
 
       {/* Footer Stats Line */}
-      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-midnight-border flex items-center justify-between text-xs text-slate-500 dark:text-midnight-muted">
+      <div className="mt-4 pt-3 border-t border-theme-border flex items-center justify-between text-xs text-theme-secondary-text">
         <span className="flex items-center space-x-1.5 font-medium">
-          <Sparkles className="w-3.5 h-3.5 text-accent-500 dark:text-midnight-primary" />
+          <Sparkles className="w-3.5 h-3.5 text-theme-primary" />
           <span>
             <strong>{rankings.length}</strong> candidate{rankings.length !== 1 ? 's' : ''} × <strong>{allSkills.length}</strong> skills:
           </span>
-          <span className="text-emerald-600 dark:text-midnight-ink font-semibold">{totalExact} exact</span>,
-          <span className="text-amber-600 dark:text-midnight-hover font-semibold">{totalRelated} related</span>,
-          <span className="text-rose-600 dark:text-midnight-hover font-semibold">{totalMissing} missing</span>
+          <span className="text-theme-ink font-semibold">{totalExact} exact</span>,
+          <span className="text-theme-hover font-semibold">{totalRelated} related</span>,
+          <span className="text-theme-hover font-semibold">{totalMissing} missing</span>
         </span>
       </div>
     </div>

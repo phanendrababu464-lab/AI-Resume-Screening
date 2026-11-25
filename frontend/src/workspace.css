@@ -1,51 +1,8 @@
 :root {
-  --canvas: #f7f8fc;
-  --panel: #fff;
-  --ink: #161c37;
-  --muted: #56617a;
-  --line: #e2e6ef;
-  --accent: #4942db;
-  --accent-hover: #3730be;
-  --tone: #eeedff;
-  --sidebar: #141936;
-  --side-text: #acb4d1;
-  --shadow: 0 4px 20px #222a5a08;
-  --focus: #8079ff;
-  --on-accent: white;
-  --brand-icon: linear-gradient(145deg, #7770f7, #4a42d8);
-  --brand-label: #a5a0ff;
-  --side-ink: white;
-  --side-hover: #ffffff12;
-  --side-active: #393393;
-  --side-line: #ffffff20;
-  --scrim: #0c102985;
-  --status-pending: #ad7609;
-  --status-ready: #139661;
-  --status-error: #d7435e;
-  --error-surface: #fff0f1;
-  --error-text: #8a2140;
-  --error-line: #f7d5de;
-  --field-error: #bd2849;
-  --preview-panel: #1b1c41;
-  --preview-line: #413a8f;
-  --preview-ink: #fff;
-  --preview-shadow: 0 20px 65px #291f7938;
-  --preview-accent: #a9a4ff;
-  --preview-tab-line: #ffffff24;
-  --preview-tab-text: #e0ddff;
-  --preview-tab-active: #534bc8;
-  --preview-content: #292952;
-  --preview-content-line: #605bb054;
-  --preview-muted: #dddaf6;
-  --preview-weight: #1e1f44;
-  --preview-weight-text: #b7b1ff;
-  --chart-comparison-cursor: #ccc;
-}
-:root.dark {
   --canvas: var(--bg-app);
   --panel: var(--bg-card);
   --ink: var(--text-primary);
-  --muted: var(--text-muted);
+  --muted: var(--text-secondary);
   --line: var(--border-color);
   --accent: var(--color-accent);
   --accent-hover: var(--color-accent-hover);
@@ -82,23 +39,21 @@
   --preview-muted: var(--muted);
   --preview-weight: var(--panel);
   --preview-weight-text: var(--accent);
-  --chart-comparison-cursor: var(--tone);
 }
-:root[data-preset="studio"]:not(.dark) {
-  --canvas: #f8f7fc;
-  --sidebar: #211734;
-  --accent: #6236c2;
-  --accent-hover: #4f289e;
-  --tone: #f1eafb;
+:root:not(.dark) {
+  --shadow: 0 4px 20px color-mix(in srgb, var(--ink) 8%, transparent);
+  --preview-shadow: var(--shadow);
+  --status-pending: var(--text-muted);
+  --status-error: var(--accent);
 }
 body { color: var(--ink); background: var(--canvas); font-family: Inter, system-ui, sans-serif; }
 button, input, select, textarea { font: inherit; }
 .app-shell, .landing { min-height: 100vh; color: var(--ink); background: var(--canvas); }
 .app-shell a, .landing a { text-decoration: none; }
 .app-shell a:focus-visible, .landing a:focus-visible, .app-shell button:focus-visible, .landing button:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
-.dark .app-main :is(input, select, textarea):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.dark :is(.breadcrumb a, .landing-nav nav > a:not(.button), .profile-row, td a, .app-main a:not([class]), .panel-heading a:not(.button)):hover { color: var(--accent-hover); }
-.dark .preview-tabs button:hover { border-color: var(--accent-hover); color: var(--accent-hover); }
+.app-main :is(input, select, textarea):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+:is(.breadcrumb a, .landing-nav nav > a:not(.button), .profile-row, td a, .app-main a:not([class]), .panel-heading a:not(.button)):hover { color: var(--accent-hover); }
+.preview-tabs button:hover { border-color: var(--accent-hover); color: var(--accent-hover); }
 .app-shell h1, .landing h1, .app-shell h2, .landing h2, .app-shell h3, .landing h3 { letter-spacing: -.035em; }
 .app-shell h2, .landing h3 { font-size: 1.16rem; line-height: 1.35; font-weight: 700; }
 .app-shell h3 { font-size: .97rem; font-weight: 700; margin-bottom: .35rem; }
@@ -197,9 +152,9 @@ td a, .app-main a:not([class]), .panel-heading a:not(.button) { color: var(--acc
 .metric-list { display: grid; gap: 10px; }
 .metric-list > div { display: grid; grid-template-columns: minmax(101px,1fr) minmax(36px,1fr) auto 62px; align-items: center; gap: 8px; font-size: .86rem; }
 .metric-list meter { width: 100%; accent-color: var(--accent); }
-.dark .metric-list meter::-webkit-meter-bar { background: var(--canvas); border-color: var(--line); }
-.dark .metric-list meter::-webkit-meter-optimum-value { background: var(--accent); }
-.dark .metric-list meter::-moz-meter-bar { background: var(--accent); }
+.metric-list meter::-webkit-meter-bar { background: var(--canvas); border-color: var(--line); }
+.metric-list meter::-webkit-meter-optimum-value { background: var(--accent); }
+.metric-list meter::-moz-meter-bar { background: var(--accent); }
 .metric-list small { color: var(--muted); text-align: right; }
 .simple-list { padding-left: 19px; list-style: disc; color: var(--muted); }
 .simple-list li { margin-bottom: 4px; }

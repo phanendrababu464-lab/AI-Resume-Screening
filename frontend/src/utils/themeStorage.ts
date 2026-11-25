@@ -3,11 +3,11 @@ import type { Theme, Preset } from '../tokens/presets.ts';
 export const THEME_STORAGE_KEY = 'theme';
 export const PRESET_STORAGE_KEY = 'style-preset';
 
-export const DEFAULT_THEME: Theme = 'dark';
+export const DEFAULT_THEME: Theme = 'light';
 export const DEFAULT_PRESET: Preset = 'studio';
 
 /**
- * Safely loads the saved theme from localStorage, defaulting to Midnight Bronze.
+ * Safely loads the saved theme from localStorage, defaulting to light mode.
  */
 export function loadSavedTheme(): Theme {
   try {
