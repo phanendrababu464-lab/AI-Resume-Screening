@@ -56,3 +56,10 @@ test('recovers readiness on request and saves theme choice', async () => {
   await user.click(screen.getByRole('button', { name: 'Dark' }));
   await waitFor(() => expect(document.documentElement.classList.contains('dark')).toBe(true));
 });
+
+test('shows when the deployed backend needs updating', async () => {
+  vi.mocked(api.serviceStatus).mockResolvedValue('updateRequired');
+  visit('/workspace/new');
+  expect(await screen.findByText('Backend update required.', { exact: false })).toBeTruthy();
+  expect((screen.getByRole('button', { name: 'Screen and rank' }) as HTMLButtonElement).disabled).toBe(true);
+});

@@ -278,6 +278,7 @@ async function requestJson<T>(path: string, options: RequestInit = {}, timeout =
 
 export async function serviceStatus(signal?: AbortSignal) {
   const response = await fetchWithTimeout(getApiUrl('/api/ready'), { signal }, 8000);
+  if (response.status === 404) return 'updateRequired';
   if (response.status !== 200 && response.status !== 503) throw new Error('Backend unavailable');
   const data = await response.json() as { status: 'ready' | 'initializing' | 'failed' };
   return data.status;

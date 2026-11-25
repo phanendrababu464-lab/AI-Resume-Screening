@@ -24,7 +24,7 @@ export interface Draft {
   samples: boolean;
 }
 
-export function ScreeningWorkspace({ draft, setDraft, weights, setWeights, onRun, running, error, config }: {
+export function ScreeningWorkspace({ draft, setDraft, weights, setWeights, onRun, running, error, ready, config }: {
   draft: Draft;
   setDraft: (value: Draft) => void;
   weights: HybridWeights;
@@ -32,6 +32,7 @@ export function ScreeningWorkspace({ draft, setDraft, weights, setWeights, onRun
   onRun: () => void;
   running: boolean;
   error: string;
+  ready: boolean;
   config?: ServiceConfig;
 }) {
   const [samples, setSamples] = useState<SamplesResponse>();
@@ -115,7 +116,7 @@ export function ScreeningWorkspace({ draft, setDraft, weights, setWeights, onRun
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (draft.text.trim() && (draft.files.length || draft.samples) && validWeights) onRun();
+    if (ready && draft.text.trim() && (draft.files.length || draft.samples) && validWeights) onRun();
   }
 
   const busy = running || importing || loadingSample;
@@ -148,7 +149,7 @@ export function ScreeningWorkspace({ draft, setDraft, weights, setWeights, onRun
       <section className="panel weights-panel stack"><h2>Scoring weights</h2><WeightControls weights={weights} onChange={setWeights} /></section>
     </fieldset>
     {(localError || error) && <p className="notice danger" role="alert">{localError || error}</p>}
-    <div className="controls-footer"><p className="muted">Review evidence before making a hiring decision.</p><button className="button primary" disabled={busy || !draft.text.trim() || (!draft.files.length && !draft.samples) || !validWeights}><Play size={17} />{running ? 'Screening resumes…' : error ? 'Retry screening' : 'Screen and rank'}</button></div>
+    <div className="controls-footer"><p className="muted">Review evidence before making a hiring decision.</p><button className="button primary" disabled={!ready || busy || !draft.text.trim() || (!draft.files.length && !draft.samples) || !validWeights}><Play size={17} />{running ? 'Screening resumes…' : error ? 'Retry screening' : 'Screen and rank'}</button></div>
     {running && <div className="panel loading" role="status">Reading resumes and calculating match scores…<div /><div /><div /></div>}
   </form>;
 }

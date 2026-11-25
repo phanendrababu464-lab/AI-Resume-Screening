@@ -23,6 +23,7 @@ const freshDraft = (): Draft => ({ text: '', overrides: { ...EMPTY_OVERRIDES }, 
 const labels = {
   checking: 'Checking connection', ready: 'All systems operational', initializing: 'Models initializing',
   failed: 'Model initialization failed', unavailable: 'Backend unavailable', offline: 'Network disconnected',
+  updateRequired: 'Backend update required',
 };
 type Status = keyof typeof labels;
 type ActivityItem = { id: number; title: string; date: Date; total: number; shortlisted: number; average: number };
@@ -111,7 +112,7 @@ function Workspace() {
   }
 
   async function run() {
-    if (pending.current) return;
+    if (pending.current || system.status !== 'ready') return;
     const controller = new AbortController();
     pending.current = controller;
     setRunning(true); setError('');
@@ -149,7 +150,7 @@ function Workspace() {
         {section === 'candidates' && !!session?.file_errors.length && <div className="notice" role="status"><ul>{session.file_errors.map((item, index) => <li key={index}>{item.filename} · {item.error}</li>)}</ul></div>}
         <Routes>
           <Route index element={<Dashboard session={session} shortlisted={shortlisted} history={history} onNew={newSession} />} />
-          <Route path="new" element={<ScreeningWorkspace draft={draft} setDraft={setDraft} weights={weights} setWeights={setWeights} onRun={run} running={running} error={error} config={system.config} />} />
+          <Route path="new" element={<ScreeningWorkspace draft={draft} setDraft={setDraft} weights={weights} setWeights={setWeights} onRun={run} running={running} error={error} ready={system.status === 'ready'} config={system.config} />} />
           <Route path="candidates" element={session ? <Leaderboard key={history[0]?.id} session={session} shortlisted={shortlisted} selected={selected} toggleShortlist={id => updateSet(setShortlisted, id)} toggleSelection={id => updateSet(setSelected, id)} /> : <EmptyResults />} />
           <Route path="candidates/:id" element={session ? <DetailsRoute session={session} shortlisted={shortlisted} toggle={id => updateSet(setShortlisted, id)} /> : <EmptyResults />} />
           <Route path="compare" element={session ? <Compare session={session} selected={selected} /> : <EmptyResults />} />
@@ -160,6 +161,7 @@ function Workspace() {
             <section className="panel stack"><h2>Scoring defaults</h2><WeightControls weights={weights} onChange={setWeights} /></section></div>} />
           <Route path="status" element={<section className="panel stack"><div className="panel-heading"><div><h2>{labels[system.status]}</h2><p>Readiness is checked every 25 seconds.</p></div><button className="button secondary" onClick={system.retry}>Check again</button></div>
             {system.status === 'unavailable' && <p>Check the network connection or allow Render time to wake up.</p>}
+            {system.status === 'updateRequired' && <p>The service is running an earlier release. Screening resumes once the backend serves the current API.</p>}
             {system.status === 'failed' && <p>The backend is responding. The service owner can review model startup logs and restart the service.</p>}
             {system.status === 'initializing' && <p>The screening models are loading. Try again once the service is ready.</p>}
             <dl className="status-grid"><dt>Screening limits</dt><dd>{system.config ? `${system.config.max_resumes_per_batch} files · ${system.config.max_file_size_bytes / 1024 ** 2} MB each · ${system.config.max_batch_size_bytes / 1024 ** 2} MB per batch` : 'Unavailable'}</dd>
