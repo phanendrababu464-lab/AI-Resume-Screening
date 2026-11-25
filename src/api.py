@@ -117,8 +117,8 @@ else:
 # ---------------------------------------------------------------------------
 async def _warm_up_model() -> None:
     def load() -> None:
-        get_skill_extractor()
         get_sentence_model().encode(["warmup"], show_progress_bar=False, convert_to_numpy=True)
+        get_skill_extractor()
 
     try:
         await asyncio.get_running_loop().run_in_executor(_SCREENING_EXECUTOR, load)

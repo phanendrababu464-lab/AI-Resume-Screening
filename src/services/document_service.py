@@ -3,8 +3,6 @@
 import io
 from zipfile import ZipFile, BadZipFile
 
-from src.parser import extract_text
-
 
 def check_document(stream: io.BytesIO) -> None:
     prefix = stream.read(8)
@@ -29,5 +27,7 @@ def check_document(stream: io.BytesIO) -> None:
 
 
 def read_job_text(stream: io.BytesIO) -> str:
+    from src.parser import extract_text
+
     check_document(stream)
     return extract_text(stream, stream.name)

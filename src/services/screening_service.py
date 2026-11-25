@@ -9,14 +9,13 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import re
-from typing import Any, BinaryIO, Optional, Union
+from typing import Any, BinaryIO, Optional, TYPE_CHECKING, Union
 
-import numpy as np
-from sentence_transformers import SentenceTransformer
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 from src.anonymizer import anonymize_text
 from src.config import (
@@ -27,13 +26,10 @@ from src.config import (
     DEFAULT_RENORMALIZE_WEIGHTS,
     DEFAULT_REQUIRED_SKILL_WEIGHT,
     DEFAULT_SEMANTIC_SIMILARITY_WEIGHT,
-    EMBEDDING_MODEL_NAME,
-    EMBEDDING_REVISION,
     TFIDF_MAX_NGRAM,
     RELATED_SKILLS_FILE,
 )
-from src.job_parser import extract_min_experience_years, parse_job_description
-from src.parser import extract_text, split_resume_sections
+from src.job_parser import extract_min_experience_years, get_skill_extractor, parse_job_description
 from src.preprocessor import clean_text
 from src.schemas import (
     CandidateRanking,
@@ -45,7 +41,6 @@ from src.schemas import (
     ScreeningResult,
     WeightConfig,
 )
-from src.skill_extractor import TechnicalSkillExtractor
 
 
 def verify_schemas_path(repo_root: Path, schemas_file: Path) -> bool:
@@ -57,24 +52,25 @@ def verify_schemas_path(repo_root: Path, schemas_file: Path) -> bool:
         return False
 
 # Cached singleton instances for CPU inference efficiency
-_SKILL_EXTRACTOR: Optional[TechnicalSkillExtractor] = None
 _SENTENCE_MODEL: Optional[SentenceTransformer] = None
 _RELATED_SKILLS_MAP: Optional[dict[str, dict[str, float]]] = None
-
-
-def get_skill_extractor() -> TechnicalSkillExtractor:
-    """Returns a cached singleton instance of TechnicalSkillExtractor."""
-    global _SKILL_EXTRACTOR
-    if _SKILL_EXTRACTOR is None:
-        _SKILL_EXTRACTOR = TechnicalSkillExtractor()
-    return _SKILL_EXTRACTOR
 
 
 def get_sentence_model() -> SentenceTransformer:
     """Returns a cached singleton instance of SentenceTransformer on CPU."""
     global _SENTENCE_MODEL
     if _SENTENCE_MODEL is None:
-        _SENTENCE_MODEL = SentenceTransformer(EMBEDDING_MODEL_NAME, device=DEFAULT_DEVICE, revision=EMBEDDING_REVISION, trust_remote_code=False)
+        from src.warm_cache import ensure_embedding_snapshot
+
+        model_path = ensure_embedding_snapshot()
+        os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+        import torch
+        from sentence_transformers import SentenceTransformer
+
+        torch.set_num_threads(int(os.getenv("OMP_NUM_THREADS", "1")))
+        _SENTENCE_MODEL = SentenceTransformer(
+            model_path, device=DEFAULT_DEVICE, local_files_only=True, trust_remote_code=False,
+        )
     return _SENTENCE_MODEL
 
 
@@ -197,6 +193,8 @@ def parse_resumes(
     """
     if not files:
         return []
+
+    from src.parser import extract_text, split_resume_sections
 
     extractor = get_skill_extractor()
     results: list[ParsedResume] = []
@@ -427,6 +425,10 @@ def rank(
         for pr in parsed_resumes:
             pr.experience_years = extract_evidenced_experience(pr.sections.experience or pr.raw_text)
 
+    import numpy as np
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+
     # 4. Text preparation for semantic similarity & TF-IDF
     jd_sem_text = job_obj.cleaned_text if job_obj.cleaned_text.strip() else job_obj.raw_text
     cand_sem_texts: list[str] = []
@@ -444,7 +446,9 @@ def rank(
         valid_indices = [i for i, t in enumerate(cand_sem_texts) if t]
         if valid_indices:
             valid_texts = [cand_sem_texts[i][:24000] for i in valid_indices]
-            all_embs = model.encode([jd_sem_text] + valid_texts, convert_to_numpy=True, show_progress_bar=False)
+            all_embs = model.encode(
+                [jd_sem_text] + valid_texts, batch_size=4, convert_to_numpy=True, show_progress_bar=False,
+            )
             jd_emb = np.atleast_2d(all_embs[0])
             cand_embs = np.atleast_2d(all_embs[1:])
             sims = cosine_similarity(jd_emb, cand_embs)[0]

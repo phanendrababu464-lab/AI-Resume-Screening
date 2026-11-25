@@ -5,8 +5,6 @@ import logging
 import os
 
 import httpx
-from google import genai
-from google.genai import errors, types
 from pydantic import BaseModel, Field
 
 from src.anonymizer import anonymize_text
@@ -53,6 +51,9 @@ def generate_insights(job: str, excerpt: str, matched: list[str], missing: list[
         "matched_skills": matched,
         "missing_skill_evidence": missing,
     })
+    from google import genai
+    from google.genai import errors, types
+
     try:
         with genai.Client(api_key=key, http_options=types.HttpOptions(
             timeout=9000,

@@ -144,7 +144,7 @@ def test_gemini_structured_output_filters_fabricated_evidence(monkeypatch):
         "areas_to_verify": [], "interview_questions": ["How did you version the API?"],
         "supporting_quotes": [resume, "This sentence does not exist."],
     })
-    monkeypatch.setattr("src.services.insights.genai.Client", lambda **kwargs: mock)
+    monkeypatch.setattr("google.genai.Client", lambda **kwargs: mock)
     result = generate_insights("Find a Python engineer", resume, ["Python"], [])
     assert result.status == "success"
     assert result.analysis.supporting_quotes == [resume]
@@ -194,5 +194,17 @@ def test_insights_accounts_for_provider_quota(monkeypatch):
     mock.__enter__.return_value.models.generate_content.side_effect = ClientError(
         429, {"error": {"code": 429, "message": "quota"}}
     )
-    monkeypatch.setattr("src.services.insights.genai.Client", lambda **kwargs: mock)
+    monkeypatch.setattr("google.genai.Client", lambda **kwargs: mock)
     assert generate_insights("Role", "Resume", [], []).status == "quota"
+
+
+
+def test_api_import_leaves_heavy_models_for_background_startup():
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import src.api, sys; assert not {'torch', 'spacy', 'sentence_transformers'} & sys.modules.keys()"],
+        capture_output=True, text=True, timeout=20,
+    )
+    assert result.returncode == 0, result.stderr

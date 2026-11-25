@@ -25,7 +25,25 @@ jobs:
       - run: uv python install 3.12.8
       - run: uv sync --frozen
       - run: uv run --frozen python -m src.warm_cache
-      - run: HF_HUB_OFFLINE=1 uv run --frozen pytest -q
+      - name: Backend tests
+        id: backend
+        run: HF_HUB_OFFLINE=1 uv run --frozen pytest -q --junitxml="$RUNNER_TEMP/hirelens-pytest.xml"
+      - name: Report backend test failures
+        if: failure() && steps.backend.outcome == 'failure'
+        run: |
+          uv run --frozen python - <<'PY'
+          import os
+          from pathlib import Path
+          from xml.etree import ElementTree
+
+          report = Path(os.environ["RUNNER_TEMP"]) / "hirelens-pytest.xml"
+          if report.exists():
+              for case in ElementTree.parse(report).iter("testcase"):
+                  for issue in [*case.findall("failure"), *case.findall("error")]:
+                      message = issue.get("message", "Backend test failed").replace("%", "%25")
+                      message = message.replace("\r", "%0D").replace("\n", "%0A")
+                      print(f"::error title={case.get('name', 'pytest')}::{message}")
+          PY
       - run: npm ci --prefix frontend
       - run: npm run typecheck --prefix frontend
       - run: npm run lint --prefix frontend

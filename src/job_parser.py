@@ -7,9 +7,10 @@ and in-line cue phrases, and extracts minimum required years of experience.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from src.skill_extractor import TechnicalSkillExtractor
+if TYPE_CHECKING:
+    from src.skill_extractor import TechnicalSkillExtractor
 
 # Cached singleton instance of TechnicalSkillExtractor
 _SKILL_EXTRACTOR: TechnicalSkillExtractor | None = None
@@ -19,6 +20,8 @@ def get_skill_extractor() -> TechnicalSkillExtractor:
     """Returns a cached instance of TechnicalSkillExtractor."""
     global _SKILL_EXTRACTOR
     if _SKILL_EXTRACTOR is None:
+        from src.skill_extractor import TechnicalSkillExtractor
+
         _SKILL_EXTRACTOR = TechnicalSkillExtractor()
     return _SKILL_EXTRACTOR
 
